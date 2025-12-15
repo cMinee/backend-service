@@ -10,20 +10,20 @@ const roboto = Roboto({
 
 const theme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: 'light',
     primary: {
-      main: '#90caf9', // Light Blue
+      main: '#1976d2', // Darker Blue for Light Mode
     },
     secondary: {
-      main: '#ce93d8', // Light Purple
+      main: '#9c27b0', // Darker Purple for Light Mode
     },
     background: {
-      default: '#0a1929', // Deep dark blue
-      paper: '#001e3c', // Slightly lighter dark blue
+      default: '#ffffff', // White
+      paper: '#f8f9fa', // Very light grey
     },
     text: {
-      primary: '#ffffff',
-      secondary: '#b0bec5',
+      primary: '#0a1929', // Dark Blue Text
+      secondary: '#546e7a', // Grey Text
     },
   },
   typography: {
@@ -33,7 +33,7 @@ const theme = createTheme({
       fontWeight: 800,
       letterSpacing: '-0.02em',
       lineHeight: 1.2,
-      background: 'linear-gradient(to right, #90caf9, #ce93d8)',
+      background: 'linear-gradient(to right, #1976d2, #9c27b0)',
       WebkitBackgroundClip: 'text',
       WebkitTextFillColor: 'transparent',
       marginBottom: '1rem',
@@ -42,11 +42,11 @@ const theme = createTheme({
       fontSize: '2.5rem',
       fontWeight: 700,
       marginBottom: '0.5rem',
-      color: '#ffffff',
+      color: '#0a1929',
     },
     h5: {
       fontWeight: 500,
-      color: '#b0bec5',
+      color: '#546e7a',
       lineHeight: 1.6,
     },
     button: {
@@ -73,14 +73,14 @@ const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          background: 'rgba(10, 25, 41, 0.7)',
+          background: 'rgba(255, 255, 255, 0.8)',
           backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
+          border: '1px solid rgba(0, 0, 0, 0.05)',
           transition: 'transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out',
           '&:hover': {
             transform: 'translateY(-5px)',
-            boxShadow: '0 8px 16px rgba(0,0,0,0.5)',
-            borderColor: 'rgba(144, 202, 249, 0.5)',
+            boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
+            borderColor: 'rgba(25, 118, 210, 0.5)',
           },
         },
       },

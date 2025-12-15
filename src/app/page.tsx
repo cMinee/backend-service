@@ -42,8 +42,8 @@ const StatCard = ({ title, value, icon, color, delay }: { title: string, value: 
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay }}
     >
-        <Card sx={{ height: '100%', position: 'relative', overflow: 'hidden', borderRadius: 4, background: 'rgba(255,255,255,0.03)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, transform: 'rotate(15deg) scale(1.5)' }}>
+        <Card sx={{ height: '100%', position: 'relative', overflow: 'hidden', borderRadius: 4, background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.05)' }}>
+            <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, transform: 'rotate(15deg) scale(1.5)', color: color }}>
                 {icon}
             </Box>
             <CardContent>
@@ -60,9 +60,9 @@ const StatCard = ({ title, value, icon, color, delay }: { title: string, value: 
 
 export default function Dashboard() {
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#0a1929' }}>
+    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Navbar */}
-      <AppBar position="sticky" color="transparent" elevation={0} sx={{ backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(10, 25, 41, 0.7)' }}>
+      <AppBar position="sticky" color="transparent" elevation={0} sx={{ backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(0,0,0,0.05)', background: 'rgba(255, 255, 255, 0.7)' }}>
         <Toolbar>
            <StorageIcon sx={{ mr: 2, color: 'secondary.main' }} />
           <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 'bold', background: 'linear-gradient(to right, #90caf9, #ce93d8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
@@ -132,20 +132,20 @@ export default function Dashboard() {
             {/* Revenue Trend Chart */}
             <Grid size={{ xs: 12, md: 8 }}>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
-                    <Paper sx={{ p: 3, borderRadius: 4, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', height: 400 }}>
+                    <Paper sx={{ p: 3, borderRadius: 4, background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.05)', height: 400 }}>
                         <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
                             Revenue Trend
                         </Typography>
                         <ResponsiveContainer width="100%" height="90%">
                             <BarChart data={dateData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                                <XAxis dataKey="date" stroke="#bdbdbd" />
-                                <YAxis stroke="#bdbdbd" tickFormatter={(value) => `฿${value}`} width={80} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
+                                <XAxis dataKey="date" stroke="#546e7a" />
+                                <YAxis stroke="#546e7a" tickFormatter={(value) => `฿${value}`} width={80} />
                                 <RechartsTooltip 
-                                    contentStyle={{ backgroundColor: '#0a1929', borderColor: 'rgba(255,255,255,0.1)' }}
-                                    itemStyle={{ color: '#fff' }}
+                                    contentStyle={{ backgroundColor: '#ffffff', borderColor: 'rgba(0,0,0,0.1)', color: '#000' }}
+                                    itemStyle={{ color: '#000' }}
                                 />
-                                <Bar dataKey="amount" fill="#90caf9" radius={[4, 4, 0, 0]} barSize={40} />
+                                <Bar dataKey="amount" fill="#1976d2" radius={[4, 4, 0, 0]} barSize={40} />
                             </BarChart>
                         </ResponsiveContainer>
                     </Paper>
@@ -155,7 +155,7 @@ export default function Dashboard() {
             {/* Status Pie Chart */}
              <Grid size={{ xs: 12, md: 4 }}>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
-                    <Paper sx={{ p: 3, borderRadius: 4, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', height: 400, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <Paper sx={{ p: 3, borderRadius: 4, background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.05)', height: 400, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                          <Typography variant="h6" gutterBottom sx={{ alignSelf: 'flex-start', mb: 2 }}>
                             Order Status
                         </Typography>
@@ -175,7 +175,7 @@ export default function Dashboard() {
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <RechartsTooltip contentStyle={{ backgroundColor: '#0a1929', borderRadius: 8 }} />
+                                <RechartsTooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: 8, color: '#000' }} />
                             </PieChart>
                         </ResponsiveContainer>
                         <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>

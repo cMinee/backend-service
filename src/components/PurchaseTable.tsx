@@ -222,9 +222,9 @@ export default function PurchaseTable() {
             startIcon={<CloudDownloadIcon />}
             onClick={handleExport}
             sx={{ 
-              borderColor: 'rgba(255,255,255,0.2)',
+              borderColor: 'rgba(0,0,0,0.1)',
               color: 'text.primary',
-              '&:hover': { borderColor: 'secondary.main', background: 'rgba(206, 147, 216, 0.05)' }
+              '&:hover': { borderColor: 'secondary.main', background: 'rgba(156, 39, 176, 0.05)' }
             }}
           >
             Export
@@ -250,17 +250,18 @@ export default function PurchaseTable() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
         sx={{ 
-          background: 'rgba(18, 18, 18, 0.6)', 
+          background: 'rgba(255, 255, 255, 0.8)', 
           backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 1,
-          overflow: 'hidden'
+          border: '1px solid rgba(0,0,0,0.05)',
+          borderRadius: 4,
+          overflow: 'hidden',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
         }}
       >
         <TableContainer>
           <Table sx={{ minWidth: 650 }} aria-label="purchase table">
             <TableHead>
-              <TableRow sx={{ background: 'rgba(255,255,255,0.03)' }}>
+              <TableRow sx={{ background: 'rgba(0,0,0,0.02)' }}>
                 <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>ผู้ซื้อ (Buyer)</TableCell>
                 <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>สินค้า (Product)</TableCell>
                 <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>จำนวน (Qty)</TableCell>
@@ -280,7 +281,7 @@ export default function PurchaseTable() {
                   transition={{ delay: index * 0.1 }}
                   sx={{ 
                     '&:last-child td, &:last-child th': { border: 0 },
-                    '&:hover': { background: 'rgba(255,255,255,0.02)' },
+                    '&:hover': { background: 'rgba(0,0,0,0.02)' },
                     transition: 'background 0.2s'
                   }}
                 >

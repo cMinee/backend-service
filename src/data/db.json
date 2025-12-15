@@ -49,7 +49,7 @@
     "buyerName": "May Company",
     "productName": "ship intel",
     "quantity": 10,
-    "netPrice": 3000,
+    "netPrice": 30000,
     "orderDate": "2025-12-15",
     "status": "Unpaid"
   }
