@@ -20,25 +20,39 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  TextField,
+  Select,
+  MenuItem,
+  InputLabel,
+  FormControl,
+  Stack,
+  // Grid is not used in the final clean version or if used can be kept
 } from '@mui/material';
-import { motion } from 'framer-motion';
-import * as XLSX from 'xlsx';
+import SearchIcon from '@mui/icons-material/Search';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import * as XLSX from 'xlsx';
 
-// Define the data structure matching the user's request
+// ...
 import { PurchaseTransaction, initialData } from '@/data/mockPurchases';
-
+import { motion } from 'framer-motion';
 
 const ComponentContainer = motion(Paper);
 
 export default function PurchaseTable() {
   const [data, setData] = useState<PurchaseTransaction[]>(initialData);
+  const [fullData, setFullData] = useState<PurchaseTransaction[]>(initialData);
   const [openImportModal, setOpenImportModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Filter States
+  const [searchBuyer, setSearchBuyer] = useState('');
+  const [searchProduct, setSearchProduct] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'All' | 'Paid' | 'Unpaid'>('All');
 
   useEffect(() => {
     // Fetch latest data from server on load
@@ -49,6 +63,7 @@ export default function PurchaseTable() {
                 const serverData = await res.json();
                 if (Array.isArray(serverData) && serverData.length > 0) {
                      setData(serverData);
+                     setFullData(serverData);
                 }
             }
         } catch (error) {
@@ -57,6 +72,29 @@ export default function PurchaseTable() {
     };
     fetchData();
   }, []);
+
+  const handleSearch = () => {
+    let filtered = [...fullData];
+
+    if (searchBuyer.trim()) {
+        filtered = filtered.filter(item => item.buyerName.toLowerCase().includes(searchBuyer.toLowerCase()));
+    }
+    if (searchProduct.trim()) {
+        filtered = filtered.filter(item => item.productName.toLowerCase().includes(searchProduct.toLowerCase()));
+    }
+    if (filterStatus !== 'All') {
+        filtered = filtered.filter(item => item.status === filterStatus);
+    }
+    
+    setData(filtered);
+  };
+
+  const handleResetFilter = () => {
+    setSearchBuyer('');
+    setSearchProduct('');
+    setFilterStatus('All');
+    setData(fullData);
+  };
 
   const handleImportClick = () => {
     setOpenImportModal(true);
@@ -97,7 +135,7 @@ export default function PurchaseTable() {
             }));
 
             // Merge with existing data
-            const updatedData = [...data, ...newTransactions];
+            const updatedData = [...fullData, ...newTransactions];
 
             // Sync with Server
             await fetch('/api/purchases', {
@@ -106,6 +144,7 @@ export default function PurchaseTable() {
                 body: JSON.stringify(updatedData)
             });
 
+            setFullData(updatedData);
             setData(updatedData);
             handleCloseImportModal();
             alert(`Successfully imported and synced ${newTransactions.length} items to server.`);
@@ -203,7 +242,7 @@ export default function PurchaseTable() {
             variant="h4" 
             sx={{ 
               fontWeight: 700, 
-              background: 'linear-gradient(45deg, #90caf9, #ce93d8)', 
+              background: 'linear-gradient(45deg, #1976d2, #9c27b0)', 
               WebkitBackgroundClip: 'text', 
               WebkitTextFillColor: 'transparent',
               mb: 1
@@ -243,6 +282,50 @@ export default function PurchaseTable() {
         </Box>
       </Box>
 
+      {/* Filter Section */}
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 1, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.05)' }}>
+        <Typography variant="subtitle2" sx={{ mb: 2, display: 'block', fontWeight: 600, color: 'text.secondary' }}>Filter & Search</Typography>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
+            <TextField 
+                label="Search Buyer" 
+                variant="outlined" 
+                size="small"
+                value={searchBuyer}
+                onChange={(e) => setSearchBuyer(e.target.value)}
+                sx={{ minWidth: 200 }}
+            />
+             <TextField 
+                label="Search Product" 
+                variant="outlined" 
+                size="small"
+                value={searchProduct}
+                onChange={(e) => setSearchProduct(e.target.value)}
+                sx={{ minWidth: 200 }}
+            />
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                    value={filterStatus}
+                    label="Status"
+                    onChange={(e) => setFilterStatus(e.target.value as any)}
+                >
+                    <MenuItem value="All">All Status</MenuItem>
+                    <MenuItem value="Paid">Paid</MenuItem>
+                    <MenuItem value="Unpaid">Unpaid</MenuItem>
+                </Select>
+            </FormControl>
+            
+            <Box sx={{ flexGrow: 1 }} />
+
+            <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={handleResetFilter} color="secondary">
+                Reset
+            </Button>
+             <Button variant="contained" startIcon={<SearchIcon />} onClick={handleSearch} color="primary">
+                Search
+            </Button>
+        </Stack>
+      </Paper>
+
       {/* Table Section */}
       <ComponentContainer
         elevation={0}
@@ -253,7 +336,7 @@ export default function PurchaseTable() {
           background: 'rgba(255, 255, 255, 0.8)', 
           backdropFilter: 'blur(20px)',
           border: '1px solid rgba(0,0,0,0.05)',
-          borderRadius: 4,
+          borderRadius: 1,
           overflow: 'hidden',
           boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
         }}
