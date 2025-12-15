@@ -28,6 +28,7 @@ import {
   Stack,
   // Grid is not used in the final clean version or if used can be kept
 } from '@mui/material';
+import PaymentsIcon from '@mui/icons-material/Payments';
 import SearchIcon from '@mui/icons-material/Search';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -48,6 +49,12 @@ export default function PurchaseTable() {
   const [fullData, setFullData] = useState<PurchaseTransaction[]>(initialData);
   const [openImportModal, setOpenImportModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Payment Modal States
+  const [openPaymentModal, setOpenPaymentModal] = useState(false);
+  const [currentTransaction, setCurrentTransaction] = useState<PurchaseTransaction | null>(null);
+  const [paymentFile, setPaymentFile] = useState<File | null>(null);
+  const [paymentPreview, setPaymentPreview] = useState<string | null>(null);
 
   // Filter States
   const [searchBuyer, setSearchBuyer] = useState('');
@@ -174,8 +181,131 @@ export default function PurchaseTable() {
     XLSX.writeFile(wb, "purchase_data.xlsx");
   };
 
+  // Payment Handlers
+  const handlePaymentClick = (transaction: PurchaseTransaction) => {
+    setCurrentTransaction(transaction);
+    setOpenPaymentModal(true);
+    setPaymentFile(null);
+    setPaymentPreview(transaction.paymentSlip || null);
+  };
+
+  const handleClosePaymentModal = () => {
+    setOpenPaymentModal(false);
+    setCurrentTransaction(null);
+    setPaymentFile(null);
+    setPaymentPreview(null);
+  };
+
+  const handlePaymentFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      setPaymentFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPaymentPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSavePayment = async () => {
+    if (!currentTransaction) return;
+
+    // Create updated transaction
+    const updatedTransaction: PurchaseTransaction = { 
+        ...currentTransaction, 
+        status: 'Paid',
+        paymentSlip: paymentPreview || undefined 
+    };
+
+    // Update fullData
+    const updatedFullData = fullData.map(item => 
+        item.id === currentTransaction.id ? updatedTransaction : item
+    );
+    
+    setFullData(updatedFullData);
+    // Update visible data
+    setData(prevData => prevData.map(item => item.id === currentTransaction.id ? updatedTransaction : item));
+
+    // Sync with Server
+    await fetch('/api/purchases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedFullData)
+    });
+
+    handleClosePaymentModal();
+  };
+
   return (
     <Box sx={{ width: '100%', p: 2 }}>
+      {/* Payment Proof Modal */}
+      <Dialog 
+        open={openPaymentModal} 
+        onClose={handleClosePaymentModal}
+        PaperProps={{
+            style: { 
+                borderRadius: 16, 
+                padding: 10,
+                minWidth: 400
+            }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 'bold' }}>หลักฐานรายการชำระเงิน (Payment Evidence)</DialogTitle>
+        <DialogContent>
+            {currentTransaction && (
+                <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1" gutterBottom>
+                        <strong>ผู้ซื้อ (Buyer):</strong> {currentTransaction.buyerName}
+                    </Typography>
+                    <Typography variant="subtitle1" gutterBottom>
+                         <strong>ยอดชำระ (Amount):</strong> ฿{currentTransaction.netPrice.toLocaleString()}
+                    </Typography>
+                </Box>
+            )}
+            
+            <Box 
+                sx={{ 
+                    border: '2px dashed rgba(0, 0, 0, 0.1)', 
+                    borderRadius: 2, 
+                    p: 3, 
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    bgcolor: 'rgba(0,0,0,0.02)',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.05)' }
+                }}
+            >
+                <input
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    id="payment-file-input"
+                    type="file"
+                    onChange={handlePaymentFileChange}
+                />
+                <label htmlFor="payment-file-input" style={{ width: '100%', cursor: 'pointer' }}>
+                     {!paymentPreview ? (
+                        <Box sx={{ p: 2 }}>
+                             <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                             <Typography color="text.secondary">Click to upload payment slip</Typography>
+                        </Box>
+                     ) : (
+                        <Box sx={{ position: 'relative', width: '100%', minHeight: 200, display: 'flex', justifyContent: 'center' }}>
+                            <img src={paymentPreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8 }} />
+                            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(0,0,0,0.3)', opacity: 0, transition: 'opacity 0.2s', '&:hover': { opacity: 1 } }}>
+                                <Typography sx={{ color: '#fff', fontWeight: 'bold' }}>Change Image</Typography>
+                            </Box>
+                        </Box>
+                     )}
+                </label>
+            </Box>
+        </DialogContent>
+        <DialogActions>
+            <Button onClick={handleClosePaymentModal} color="inherit">Cancel</Button>
+            <Button onClick={handleSavePayment} variant="contained" color="primary" disabled={!paymentPreview && !currentTransaction?.paymentSlip}>
+                Save & Confirm Paid
+            </Button>
+        </DialogActions>
+      </Dialog>
       {/* Import Modal */}
       <Dialog 
         open={openImportModal} 
@@ -389,12 +519,12 @@ export default function PurchaseTable() {
                       sx={{ borderRadius: '8px' }}
                     />
                   </TableCell>
-                   <TableCell align="center">
-                     <Tooltip title="Coming Soon">
-                        <IconButton size="small">
-                            <FilterListIcon fontSize="small" />
+                  <TableCell align="center">
+                    <Tooltip title="Upload Payment Evidence">
+                        <IconButton size="small" onClick={() => handlePaymentClick(row)} color={row.status === 'Paid' ? 'success' : 'primary'}>
+                            <PaymentsIcon fontSize="small" />
                         </IconButton>
-                     </Tooltip>
+                    </Tooltip>
                    </TableCell>
                 </TableRow>
               ))}

@@ -6,6 +6,7 @@ export interface PurchaseTransaction {
   netPrice: number;
   orderDate: string;
   status: 'Paid' | 'Unpaid';
+  paymentSlip?: string;
 }
 
 export const initialData: PurchaseTransaction[] = [

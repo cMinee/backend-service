@@ -9,6 +9,7 @@ export interface PurchaseTransaction {
   netPrice: number;
   orderDate: string;
   status: 'Paid' | 'Unpaid';
+  paymentSlip?: string;
 }
 
 const dbPath = path.join(process.cwd(), 'src/data/db.json');
