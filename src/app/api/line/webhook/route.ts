@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { messagingApi } from '@line/bot-sdk';
-import { initialData, PurchaseTransaction } from '@/data/mockPurchases';
+import { getPurchases } from '@/lib/db';
 
 // Initialize LINE Client
 const config = {
@@ -16,10 +16,11 @@ const formatMoney = (amount: number) => `฿${amount.toLocaleString()}`;
 // Logic to handle user text messages
 const handleTextMessage = async (text: string, replyToken: string) => {
     let replyText = '';
+    const currentData = getPurchases();
 
     if (text.includes('ยอดค้าง')) {
         // Filter unpaid orders
-        const unpaidOrders = initialData.filter(item => item.status === 'Unpaid');
+        const unpaidOrders = currentData.filter(item => item.status === 'Unpaid');
         if (unpaidOrders.length === 0) {
             replyText = 'ไม่มียอดค้างชำระครับ ✨';
         } else {
@@ -31,27 +32,11 @@ const handleTextMessage = async (text: string, replyToken: string) => {
             replyText = `📊 สรุปยอดค้างชำระ\n\n${orderList}\n\nรวมทั้งหมด: ${formatMoney(totalUnpaid)}`;
         }
     } else if (text.includes('ยอดขายรายวัน') || text.includes('ยอดขายวันนี้')) {
-        // For demo, let's use '2025-12-13' as "today" because mock data has it, 
-        // OR we can default to looking for orders matching today's system date.
-        // Let's matching the specific example logic: "ข้อมูลที่มีการขายในวันที่ถาม"
-        // Since user might ask "ยอดขายรายวัน", let's assume they mean *Today*.
-        // But our mock data is in 2025. Let's just default to showing ALL daily sales grouped by date for clarity
-        // OR filtering for a specific date if provided.
-        // Let's keep it simple: Show sales for "today" (which in mock context might be empty unless we fake it).
-        // Let's actually show a specific date present in mock data for demonstration if today is empty.
-        
-        // Simple logic: Check for date in YYYY-MM-DD format in string, else default to today
+        // Simple logic: Check for date in YYYY-MM-DD format in string, else default to truly today
         const dateMatch = text.match(/\d{4}-\d{2}-\d{2}/);
-        let targetDate = dateMatch ? dateMatch[0] : new Date().toISOString().split('T')[0];
+        const targetDate = dateMatch ? dateMatch[0] : new Date().toISOString().split('T')[0];
 
-        // Hack for demo: if no date provided and 'today' yields nothing, show 2025-12-13
-        const hasTodayOrders = initialData.some(item => item.orderDate === targetDate);
-        if (!hasTodayOrders && !dateMatch) {
-            // Check for mock data dates
-            targetDate = '2025-12-13'; // Default to a day with data for demo purposes
-        }
-
-        const dailyOrders = initialData.filter(item => item.orderDate === targetDate);
+        const dailyOrders = currentData.filter(item => item.orderDate === targetDate);
 
         if (dailyOrders.length === 0) {
             replyText = `ไม่พบยอดขายสำหรับวันที่ ${targetDate} ครับ`;

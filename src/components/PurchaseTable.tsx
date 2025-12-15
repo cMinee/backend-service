@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -40,6 +40,24 @@ export default function PurchaseTable() {
   const [openImportModal, setOpenImportModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+  useEffect(() => {
+    // Fetch latest data from server on load
+    const fetchData = async () => {
+        try {
+            const res = await fetch('/api/purchases');
+            if (res.ok) {
+                const serverData = await res.json();
+                if (Array.isArray(serverData) && serverData.length > 0) {
+                     setData(serverData);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch initial data:', error);
+        }
+    };
+    fetchData();
+  }, []);
+
   const handleImportClick = () => {
     setOpenImportModal(true);
   };
@@ -59,7 +77,7 @@ export default function PurchaseTable() {
     if (!selectedFile) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const bstr = e.target?.result;
       if (bstr) {
           try {
@@ -67,13 +85,6 @@ export default function PurchaseTable() {
             const wsname = wb.SheetNames[0];
             const ws = wb.Sheets[wsname];
             const jsonData = XLSX.utils.sheet_to_json(ws) as any[];
-            
-            // Map Excel data to our structure
-            // Assuming simplified headers or just mapping by order roughly if keys match, 
-            // but let's try to be smart or generic.
-            // For now, I will expect specific column names or just map generic if possible.
-            // Let's assume the user uses English headers similar to our keys, or we map them.
-            // Mapping strategy: Look for "Product", "Qty", "Price", etc.
             
             const newTransactions: PurchaseTransaction[] = jsonData.map((row: any, index: number) => ({
                 id: `imported-${Date.now()}-${index}`,
@@ -85,9 +96,19 @@ export default function PurchaseTable() {
                 status: (row['Status'] || row['สถานะ'] || 'Unpaid') === 'Paid' ? 'Paid' : 'Unpaid'
             }));
 
-            setData([...data, ...newTransactions]);
+            // Merge with existing data
+            const updatedData = [...data, ...newTransactions];
+
+            // Sync with Server
+            await fetch('/api/purchases', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedData)
+            });
+
+            setData(updatedData);
             handleCloseImportModal();
-            alert(`Successfully imported ${newTransactions.length} items.`);
+            alert(`Successfully imported and synced ${newTransactions.length} items to server.`);
           } catch (error) {
               console.error("Error reading file:", error);
               alert("Error parsing Excel file");
