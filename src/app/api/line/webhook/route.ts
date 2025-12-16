@@ -104,8 +104,29 @@ const handleTextMessage = async (text: string, replyToken: string) => {
         }
 
     } else {
-        // 4. Default Helper Message
-        replyText = `ผมไม่เข้าใจคำสั่งครับ 😅\nลองพิมพ์คำว่า:\n- "ยอดค้าง" เพื่อดูรายการที่ยังไม่จ่าย\n- "ยอดขายรายวัน" เพื่อดูสรุปยอดขาย\n\nหรือสั่งซื้อสินค้า:\nชื่อ\nซื้อ [ชื่อสินค้า]\nจำนวน [จำนวน]`;
+        // 4. Product Search (Fuzzy Match)
+        const inventory = getInventory();
+        const searchTerms = text.toLowerCase().split(/\s+/); // Split by space
+
+        // Filter items that match ALL search terms in (Name + Brand + SKU)
+        const matchedItems = inventory.filter(item => {
+            const itemText = `${item.productName} ${item.brand} ${item.sku}`.toLowerCase();
+            return searchTerms.every(term => itemText.includes(term));
+        });
+
+        if (matchedItems.length > 0) {
+            // Found items
+            if (matchedItems.length === 1) {
+                const item = matchedItems[0];
+                replyText = `🔎 พบสินค้า:\n\nชื่อ: ${item.productName}\nยี่ห้อ: ${item.brand}\nSKU: ${item.sku}\nราคา: ${formatMoney(item.price)}\nคงเหลือ: ${item.quantity} ชิ้น`;
+            } else {
+                 const list = matchedItems.slice(0, 5).map(item => `- ${item.productName} (${item.brand}) เหลือ ${item.quantity}`).join('\n');
+                 replyText = `🔎 เจอหลายรายการ (${matchedItems.length}):\n\n${list}\n\n(แสดงมากสุด 5 รายการ)`;
+            }
+        } else {
+             // 5. Default Helper Message (Not found)
+             replyText = `ผมไม่เข้าใจคำสั่งครับ 😅 หรือค้นหาไม่เจอ\n\nลองพิมพ์ชื่อสินค้าเพื่อเช็คสต็อก เช่น "Monitor Dell"\n\nหรือสั่งซื้อสินค้า:\nชื่อ\nซื้อ [ชื่อสินค้า]\nจำนวน [จำนวน]`;
+        }
     }
 
     try {
