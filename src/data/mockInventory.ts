@@ -1,5 +1,6 @@
 export interface InventoryItem {
   id: string;
+  sku: string;
   productName: string;
   brand: string;
   quantity: number;
@@ -7,9 +8,9 @@ export interface InventoryItem {
 }
 
 export const initialInventoryData: InventoryItem[] = [
-  { id: '1', productName: 'Wireless Headphones', brand: 'Sony', quantity: 50, price: 2995 },
-  { id: '2', productName: 'Mechanical Keyboard', brand: 'Keychron', quantity: 30, price: 3200 },
-  { id: '3', productName: 'Gaming Mouse', brand: 'Logitech', quantity: 100, price: 1150 },
-  { id: '4', productName: '27" 4K Monitor', brand: 'Dell', quantity: 15, price: 12500 },
-  { id: '5', productName: 'USB-C Hub', brand: 'Anker', quantity: 200, price: 850 },
+  { id: '1', sku: 'SNY-WH-001', productName: 'Wireless Headphones', brand: 'Sony', quantity: 50, price: 2995 },
+  { id: '2', sku: 'KYC-K2-002', productName: 'Mechanical Keyboard', brand: 'Keychron', quantity: 30, price: 3200 },
+  { id: '3', sku: 'LOG-G5-003', productName: 'Gaming Mouse', brand: 'Logitech', quantity: 100, price: 1150 },
+  { id: '4', sku: 'DEL-U27-004', productName: '27" 4K Monitor', brand: 'Dell', quantity: 15, price: 12500 },
+  { id: '5', sku: 'ANK-H7-005', productName: 'USB-C Hub', brand: 'Anker', quantity: 200, price: 850 },
 ];

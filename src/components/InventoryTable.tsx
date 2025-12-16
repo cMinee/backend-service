@@ -37,10 +37,20 @@ import DeleteConfirm from '@/components/common/DeleteConfirm';
 const ComponentContainer = motion(Paper);
 
 export default function InventoryTable() {
-  const [data, setData] = useState<InventoryItem[]>(initialInventoryData);
-  const [fullData, setFullData] = useState<InventoryItem[]>(initialInventoryData);
+  const [data, setData] = useState<InventoryItem[]>([]);
+  const [fullData, setFullData] = useState<InventoryItem[]>([]);
   const [openImportModal, setOpenImportModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    fetch('/api/inventory')
+      .then(res => res.json())
+      .then(data => {
+        setData(data);
+        setFullData(data);
+      })
+      .catch(err => console.error(err));
+  }, []);
 
   // Filter States
   const [searchProduct, setSearchProduct] = useState('');
@@ -102,7 +112,8 @@ export default function InventoryTable() {
             const jsonData = XLSX.utils.sheet_to_json(ws) as any[];
             
             const newItems: InventoryItem[] = jsonData.map((row: any, index: number) => ({
-                id: `imported-${Date.now()}-${index}`,
+                id: row['ID'] || `imported-${Date.now()}-${index}`,
+                sku: row['SKU'] || `SKU-${Date.now()}-${index}`,
                 productName: row['Product'] || row['Product Name'] || row['ชื่อสินค้า'] || 'Unknown Item',
                 brand: row['Brand'] || row['ยี่ห้อ'] || 'Unknown Brand',
                 quantity: Number(row['Qty'] || row['Quantity'] || row['จำนวน'] || 0),
@@ -128,6 +139,8 @@ export default function InventoryTable() {
   const handleExport = () => {
     // Generate Excel from current data
     const exportData = data.map(item => ({
+        'ID': item.id,
+        'SKU': item.sku,
         'Product Name': item.productName,
         'Brand': item.brand,
         'Quantity': item.quantity,
@@ -256,6 +269,19 @@ export default function InventoryTable() {
             <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 350 }}>
                 {currentEditItem && (
                     <>
+                        <TextField
+                            label="ID"
+                            value={currentEditItem.id}
+                            disabled
+                            fullWidth
+                            helperText="ID cannot be changed"
+                        />
+                        <TextField
+                            label="SKU"
+                            value={currentEditItem.sku}
+                            onChange={(e) => handleEditChange('sku', e.target.value)}
+                            fullWidth
+                        />
                         <TextField
                             label="Product Name"
                             value={currentEditItem.productName}
@@ -418,6 +444,8 @@ export default function InventoryTable() {
           <Table sx={{ minWidth: 650 }} aria-label="inventory table">
             <TableHead>
               <TableRow sx={{ background: 'rgba(0,0,0,0.02)' }}>
+                <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>ID</TableCell>
+                <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>SKU</TableCell>
                 <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>ชื่อสินค้า (Product)</TableCell>
                 <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>ยี่ห้อ (Brand)</TableCell>
                 <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>จำนวน (Qty)</TableCell>
@@ -440,7 +468,13 @@ export default function InventoryTable() {
                     transition: 'background 0.2s'
                   }}
                 >
-                  <TableCell component="th" scope="row" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                  <TableCell component="th" scope="row" sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                    {row.id}
+                  </TableCell>
+                  <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                    {row.sku}
+                  </TableCell>
+                  <TableCell sx={{ color: 'text.primary', fontWeight: 500 }}>
                     {row.productName}
                   </TableCell>
                   <TableCell sx={{ color: 'text.secondary' }}>

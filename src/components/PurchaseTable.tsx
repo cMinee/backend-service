@@ -141,20 +141,28 @@ export default function PurchaseTable() {
                 status: (row['Status'] || row['สถานะ'] || 'Unpaid') === 'Paid' ? 'Paid' : 'Unpaid'
             }));
 
-            // Merge with existing data
-            const updatedData = [...fullData, ...newTransactions];
-
-            // Sync with Server
-            await fetch('/api/purchases', {
+            // 1. Send ONLY new transactions to the import API
+            const res = await fetch('/api/purchases/import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updatedData)
+                body: JSON.stringify(newTransactions)
             });
 
-            setFullData(updatedData);
-            setData(updatedData);
-            handleCloseImportModal();
-            alert(`Successfully imported and synced ${newTransactions.length} items to server.`);
+            const result = await res.json();
+
+            if (result.status === 'success') {
+                 // 2. Refresh Data from Server (Get the full updated list)
+                 const refreshRes = await fetch('/api/purchases');
+                 const refreshedData = await refreshRes.json();
+                 
+                 setFullData(refreshedData);
+                 setData(refreshedData);
+                 
+                 handleCloseImportModal();
+                 alert(`Successfully imported ${newTransactions.length} items.\nInventory has been updated.\n\nLogs:\n${result.logs.join('\n')}`);
+            } else {
+                 alert(`Failed to import: ${result.message}`);
+            }
           } catch (error) {
               console.error("Error reading file:", error);
               alert("Error parsing Excel file");

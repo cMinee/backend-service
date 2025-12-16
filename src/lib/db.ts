@@ -12,16 +12,39 @@ export interface PurchaseTransaction {
   paymentSlip?: string;
 }
 
-const dbPath = path.join(process.cwd(), 'src/data/db.json');
-
-// Ensure DB file exists
-if (!fs.existsSync(dbPath)) {
-  fs.writeFileSync(dbPath, '[]');
+export interface InventoryItem {
+  id: string;
+  sku: string;
+  productName: string;
+  brand: string;
+  quantity: number;
+  price: number;
 }
 
+const purchasesDbPath = path.join(process.cwd(), 'src/data/db.json');
+const inventoryDbPath = path.join(process.cwd(), 'src/data/inventory.json');
+
+// Ensure DB files exist
+if (!fs.existsSync(purchasesDbPath)) {
+  fs.writeFileSync(purchasesDbPath, '[]');
+}
+
+if (!fs.existsSync(inventoryDbPath)) {
+  // Initialize with some mock data if empty
+  const initialInventory = [
+    { id: '1', sku: 'SNY-WH-001', productName: 'Wireless Headphones', brand: 'Sony', quantity: 50, price: 2995 },
+    { id: '2', sku: 'KYC-K2-002', productName: 'Mechanical Keyboard', brand: 'Keychron', quantity: 30, price: 3200 },
+    { id: '3', sku: 'LOG-G5-003', productName: 'Gaming Mouse', brand: 'Logitech', quantity: 100, price: 1150 },
+    { id: '4', sku: 'DEL-U27-004', productName: '27" 4K Monitor', brand: 'Dell', quantity: 15, price: 12500 },
+    { id: '5', sku: 'ANK-H7-005', productName: 'USB-C Hub', brand: 'Anker', quantity: 200, price: 850 },
+  ];
+  fs.writeFileSync(inventoryDbPath, JSON.stringify(initialInventory, null, 2));
+}
+
+// Purchases Functions
 export function getPurchases(): PurchaseTransaction[] {
   try {
-    const data = fs.readFileSync(dbPath, 'utf8');
+    const data = fs.readFileSync(purchasesDbPath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
     console.error('Error reading db.json', error);
@@ -31,10 +54,31 @@ export function getPurchases(): PurchaseTransaction[] {
 
 export function savePurchases(data: PurchaseTransaction[]): boolean {
   try {
-    fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
+    fs.writeFileSync(purchasesDbPath, JSON.stringify(data, null, 2));
     return true;
   } catch (error) {
     console.error('Error writing to db.json', error);
+    return false;
+  }
+}
+
+// Inventory Functions
+export function getInventory(): InventoryItem[] {
+  try {
+    const data = fs.readFileSync(inventoryDbPath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading inventory.json', error);
+    return [];
+  }
+}
+
+export function saveInventory(data: InventoryItem[]): boolean {
+  try {
+    fs.writeFileSync(inventoryDbPath, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error writing to inventory.json', error);
     return false;
   }
 }
