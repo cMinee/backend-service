@@ -1,17 +1,13 @@
 'use client';
-import { AppBar, Toolbar, Typography, Button, Container, Box, Card, CardContent, Grid, Paper, IconButton } from '@mui/material';
+import { Typography, Container, Box, Card, CardContent, Grid, Paper } from '@mui/material';
 import { motion } from 'framer-motion';
 import StorageIcon from '@mui/icons-material/Storage';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PendingIcon from '@mui/icons-material/Pending';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import Link from 'next/link';
 import { initialData } from '@/data/mockPurchases';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,  PieChart, Pie, Cell } from 'recharts';
-
-const MotionBox = motion(Box);
 
 // Calculate Stats
 const totalRevenue = initialData.reduce((sum, item) => sum + item.netPrice, 0);
@@ -60,23 +56,7 @@ const StatCard = ({ title, value, icon, color, delay }: { title: string, value: 
 
 export default function Dashboard() {
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Navbar */}
-      <AppBar position="sticky" color="transparent" elevation={0} sx={{ backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(0,0,0,0.05)', background: 'rgba(255, 255, 255, 0.7)' }}>
-        <Toolbar>
-           <StorageIcon sx={{ mr: 2, color: 'secondary.main' }} />
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 'bold', background: 'linear-gradient(to right, #90caf9, #ce93d8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            BackendService
-          </Typography>
-          <Link href="/purchases" passHref>
-             <Button variant="outlined" sx={{ mr: 2, borderColor: 'rgba(255,255,255,0.2)', color: 'text.primary' }}>
-                Purchase Management
-             </Button>
-          </Link>
-          <Button color="inherit">Settings</Button>
-        </Toolbar>
-      </AppBar>
-
+    <Box>
       <Container maxWidth="xl" sx={{ py: 4 }}>
         <Box sx={{ mb: 4 }}>
             <Typography variant="h4" fontWeight={700} gutterBottom>
@@ -108,7 +88,7 @@ export default function Dashboard() {
                 />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                 <StatCard 
+                <StatCard 
                     title="Paid Orders" 
                     value={paidOrders.toString()} 
                     icon={<TrendingUpIcon sx={{ fontSize: 100 }} />} 
@@ -192,27 +172,6 @@ export default function Dashboard() {
                 </motion.div>
             </Grid>
         </Grid>
-        
-        {/* Quick Actions */}
-        <Box sx={{ mt: 5, textAlign: 'center' }}>
-            <Link href="/purchases" passHref>
-                 <Button 
-                    variant="contained" 
-                    size="large" 
-                    endIcon={<ArrowForwardIcon />}
-                    sx={{ 
-                        borderRadius: 50, 
-                        px: 5, 
-                        py: 2,
-                        background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
-                        boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)',
-                        fontSize: '1.1rem'
-                    }}
-                >
-                    Manage All Purchases
-                 </Button>
-            </Link>
-        </Box>
         
       </Container>
     </Box>
