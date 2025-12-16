@@ -6,31 +6,21 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PendingIcon from '@mui/icons-material/Pending';
-import { initialData } from '@/data/mockPurchases';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,  PieChart, Pie, Cell } from 'recharts';
+import { useState, useEffect } from 'react';
 
-// Calculate Stats
-const totalRevenue = initialData.reduce((sum, item) => sum + item.netPrice, 0);
-const totalOrders = initialData.length;
-const paidOrders = initialData.filter(item => item.status === 'Paid').length;
-const unpaidOrders = initialData.filter(item => item.status === 'Unpaid').length;
+// Interfaces (Matches your DB structure)
+interface PurchaseTransaction {
+  id: string;
+  buyerName: string;
+  productName: string;
+  quantity: number;
+  netPrice: number;
+  orderDate: string;
+  status: 'Paid' | 'Unpaid';
+}
 
-// Prepare Chart Data
-const statusData = [
-  { name: 'Paid', value: paidOrders },
-  { name: 'Unpaid', value: unpaidOrders },
-];
 const COLORS = ['#00C49F', '#FF8042'];
-
-const dateData = initialData.reduce((acc: any[], item) => {
-    const existing = acc.find(x => x.date === item.orderDate);
-    if (existing) {
-        existing.amount += item.netPrice;
-    } else {
-        acc.push({ date: item.orderDate, amount: item.netPrice });
-    }
-    return acc;
-}, []).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
 const StatCard = ({ title, value, icon, color, delay }: { title: string, value: string, icon: React.ReactNode, color: string, delay: number }) => (
     <motion.div
@@ -55,6 +45,56 @@ const StatCard = ({ title, value, icon, color, delay }: { title: string, value: 
 );
 
 export default function Dashboard() {
+  const [data, setData] = useState<PurchaseTransaction[]>([]);
+  const [dateData, setDateData] = useState<any[]>([]);
+  const [statusData, setStatusData] = useState<any[]>([]);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [paidOrders, setPaidOrders] = useState(0);
+  const [unpaidOrders, setUnpaidOrders] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/purchases')
+        .then(res => res.json())
+        .then((items: PurchaseTransaction[]) => {
+            if (!Array.isArray(items)) return;
+            
+            setData(items);
+
+            // Calculate Stats
+            const revenue = items.reduce((sum, item) => sum + item.netPrice, 0);
+            const tOrders = items.length;
+            const pOrders = items.filter(item => item.status === 'Paid').length;
+            const uOrders = items.filter(item => item.status === 'Unpaid').length;
+
+            setTotalRevenue(revenue);
+            setTotalOrders(tOrders);
+            setPaidOrders(pOrders);
+            setUnpaidOrders(uOrders);
+
+            // Prepare Chart Data
+            // 1. Status Pie Chart
+            setStatusData([
+                { name: 'Paid', value: pOrders },
+                { name: 'Unpaid', value: uOrders },
+            ]);
+
+            // 2. Revenue Trend Bar Chart
+            const dData = items.reduce((acc: any[], item) => {
+                const existing = acc.find(x => x.date === item.orderDate);
+                if (existing) {
+                    existing.amount += item.netPrice;
+                } else {
+                    acc.push({ date: item.orderDate, amount: item.netPrice });
+                }
+                return acc;
+            }, []).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+            setDateData(dData);
+        })
+        .catch(err => console.error("Failed to fetch dashboard data:", err));
+  }, []);
+
   return (
     <Box>
       <Container maxWidth="xl" sx={{ py: 4 }}>
