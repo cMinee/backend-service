@@ -230,7 +230,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </Box>
         
         {/* Sidebar Footer */}
-        <Box sx={{ mt: 'auto', p: 2, borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+        {/* <Box sx={{ mt: 'auto', p: 2, borderTop: '1px solid rgba(0,0,0,0.05)' }}>
             <Box sx={{ p: 2, borderRadius: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
                  <Typography variant="subtitle2" fontWeight="bold">Pro Plan Check</Typography>
                  <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', mb: 1 }}>You have 5 days left</Typography>
@@ -238,7 +238,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                      <Box sx={{ width: '70%', height: '100%', bgcolor: '#fff', borderRadius: 2 }}></Box>
                  </Box>
             </Box>
-        </Box>
+        </Box> */}
       </Drawer>
 
       {/* Main Content */}
