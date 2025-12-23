@@ -25,14 +25,24 @@ export interface Quotation {
   id: string;
   buyerName: string;
   buyerTaxId: string;
+  buyerAddress?: string;
   productName: string;
   quantity: number;
   pricePerUnit: number;
-  totalPrice: number;
+  discountPerUnit: number;
+  subtotal: number;
+  specialDiscountPercent: number;
+  totalAfterDiscount: number;
+  vatAmount: number;
+  grandTotal: number;
   orderDate: string;
   expiryDate: string;
   status: 'Pending' | 'PO Created';
   sellerName: string;
+  sellerAddress?: string;
+  sellerPhone?: string;
+  salesPerson?: string;
+  paymentTerm?: string;
 }
 
 const purchasesDbPath = path.join(process.cwd(), 'src/data/db.json');

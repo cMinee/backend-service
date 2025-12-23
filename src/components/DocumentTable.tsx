@@ -40,14 +40,25 @@ export interface Quotation {
   id: string;
   buyerName: string;
   buyerTaxId: string;
+  buyerAddress?: string;
   productName: string;
   quantity: number;
   pricePerUnit: number;
-  totalPrice: number;
+  discountPerUnit: number;
+  subtotal: number;
+  specialDiscountPercent: number;
+  totalAfterDiscount: number;
+  vatAmount: number;
+  grandTotal: number;
   orderDate: string;
   expiryDate: string;
   status: 'Pending' | 'PO Created';
   sellerName: string;
+  sellerAddress?: string;
+  sellerPhone?: string;
+  salesPerson?: string;
+  paymentTerm?: string;
+  totalPrice?: number; // Legacy support
 }
 
 const ComponentContainer = motion(Paper);
@@ -62,7 +73,14 @@ export default function DocumentTable() {
   const [customerInput, setCustomerInput] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
   const [qtQuantity, setQtQuantity] = useState<number>(1);
-  const [sellerName, setSellerName] = useState('My Awesome Shop Co., Ltd.');
+  const [discountPerUnit, setDiscountPerUnit] = useState<number>(0);
+  const [specialDiscountPercent, setSpecialDiscountPercent] = useState<number>(0);
+  const [sellerName, setSellerName] = useState('บริษัท สิริไพศาล จำกัด');
+  const [sellerAddress, setSellerAddress] = useState('555 อาคารคิวเฮาส์ เพลินจิต ถนนเพลินจิต แขวงลุมพินี เขตปทุมวัน กรุงเทพฯ 10330');
+  const [sellerPhone, setSellerPhone] = useState('02-222-2255');
+  const [salesPerson, setSalesPerson] = useState('John Doe');
+  const [paymentTerm, setPaymentTerm] = useState('60 วัน');
+  const [buyerAddress, setBuyerAddress] = useState('');
 
   // Print States
   const [printQuotation, setPrintQuotation] = useState<Quotation | null>(null);
@@ -127,11 +145,36 @@ export default function DocumentTable() {
     setSelectedProduct(null);
     setQtQuantity(1);
     setCustomerInput('');
+    setDiscountPerUnit(0);
+    setSpecialDiscountPercent(0);
   };
 
-  const calculateTotal = () => {
-    if (!selectedProduct) return 0;
-    return selectedProduct.price * qtQuantity;
+  const calculatePricing = () => {
+    if (!selectedProduct) return { 
+        subtotal: 0, 
+        totalAfterDiscount: 0, 
+        vatAmount: 0, 
+        grandTotal: 0 
+    };
+    
+    const lineSubtotal = (selectedProduct.price - discountPerUnit) * qtQuantity;
+    const afterSpecialDiscount = lineSubtotal * (1 - specialDiscountPercent / 100);
+    const vat = afterSpecialDiscount * 0.07;
+    const grand = afterSpecialDiscount + vat;
+
+    return {
+        subtotal: lineSubtotal,
+        totalAfterDiscount: afterSpecialDiscount,
+        vatAmount: vat,
+        grandTotal: grand
+    };
+  };
+
+  // Helper to convert number to Thai words (Simplified for demo)
+  const numberToThaiWords = (num: number) => {
+    // This is a very basic mock of "Thai Baht Text"
+    if (num === 0) return 'ศูนย์บาทถ้วน';
+    return `${num.toLocaleString()} บาทถ้วน`; // In real app, use a lib like bahttext.js
   };
 
   const handleSaveQT = async () => {
@@ -153,18 +196,29 @@ export default function DocumentTable() {
     const expiry = new Date();
     expiry.setMonth(now.getMonth() + 3);
 
+    const pricing = calculatePricing();
     const newQT: Quotation = {
       id: `QT-${Date.now().toString().slice(-6)}`,
       buyerName: buyer.name,
       buyerTaxId: buyer.taxId,
+      buyerAddress: buyerAddress,
       productName: selectedProduct.productName,
       quantity: qtQuantity,
       pricePerUnit: selectedProduct.price,
-      totalPrice: calculateTotal(),
+      discountPerUnit: discountPerUnit,
+      subtotal: pricing.subtotal,
+      specialDiscountPercent: specialDiscountPercent,
+      totalAfterDiscount: pricing.totalAfterDiscount,
+      vatAmount: pricing.vatAmount,
+      grandTotal: pricing.grandTotal,
       orderDate: now.toISOString().split('T')[0],
       expiryDate: expiry.toISOString().split('T')[0],
       status: 'Pending',
-      sellerName: sellerName
+      sellerName: sellerName,
+      sellerAddress: sellerAddress,
+      sellerPhone: sellerPhone,
+      salesPerson: salesPerson,
+      paymentTerm: paymentTerm
     };
 
     // Save to local state
@@ -201,7 +255,7 @@ export default function DocumentTable() {
             buyerName: qt.buyerName,
             productName: qt.productName,
             quantity: qt.quantity,
-            netPrice: qt.totalPrice,
+            netPrice: qt.grandTotal,
             orderDate: new Date().toISOString().split('T')[0],
             status: 'Unpaid'
         };
@@ -282,20 +336,61 @@ export default function DocumentTable() {
                 )}
             />
 
-            <TextField 
-                label="จำนวน (Quantity)"
-                type="number"
-                value={qtQuantity}
-                onChange={(e) => setQtQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                fullWidth
-            />
+            <Stack direction="row" spacing={2}>
+                <TextField 
+                    label="จำนวน (Quantity)"
+                    type="number"
+                    value={qtQuantity}
+                    onChange={(e) => setQtQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    fullWidth
+                />
+                <TextField 
+                    label="ส่วนลดต่อหน่วย (Discount/Unit)"
+                    type="number"
+                    value={discountPerUnit}
+                    onChange={(e) => setDiscountPerUnit(Math.max(0, parseFloat(e.target.value) || 0))}
+                    fullWidth
+                />
+            </Stack>
+
+            <Stack direction="row" spacing={2}>
+                <TextField 
+                    label="หักส่วนลดพิเศษ % (Special Discount %)"
+                    type="number"
+                    value={specialDiscountPercent}
+                    onChange={(e) => setSpecialDiscountPercent(Math.max(0, parseFloat(e.target.value) || 0))}
+                    fullWidth
+                />
+                <TextField 
+                    label="เครดิต (Payment Term)"
+                    value={paymentTerm}
+                    onChange={(e) => setPaymentTerm(e.target.value)}
+                    fullWidth
+                />
+            </Stack>
 
             {selectedProduct && (
                 <Box sx={{ p: 2, bgcolor: 'rgba(25, 118, 210, 0.05)', borderRadius: 2 }}>
-                    <Typography variant="body2" color="text.secondary">สรุปราคา (Summary)</Typography>
-                    <Typography variant="h6" color="primary">
-                        ฿{calculateTotal().toLocaleString()}
-                    </Typography>
+                    <Typography variant="body2" color="text.secondary">สรุปราคา (Pricing Summary)</Typography>
+                    <Stack spacing={1} sx={{ mt: 1 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="body2">รวมเงิน:</Typography>
+                            <Typography variant="body2">฿{calculatePricing().subtotal.toLocaleString()}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="body2">หักส่วนลดพิเศษ ({specialDiscountPercent}%):</Typography>
+                            <Typography variant="body2">-฿{(calculatePricing().subtotal - calculatePricing().totalAfterDiscount).toLocaleString()}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="body2">ภาษีมูลค่าเพิ่ม 7%:</Typography>
+                            <Typography variant="body2">฿{calculatePricing().vatAmount.toLocaleString()}</Typography>
+                        </Box>
+                        <Divider />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="h6" color="primary">ยอดสุทธิ (Grand Total):</Typography>
+                            <Typography variant="h6" color="primary">฿{calculatePricing().grandTotal.toLocaleString()}</Typography>
+                        </Box>
+                    </Stack>
                 </Box>
             )}
           </Stack>
@@ -315,57 +410,149 @@ export default function DocumentTable() {
       >
         <DialogTitle>Quotation Preview</DialogTitle>
         <DialogContent>
-            <Box id="printable-quotation" sx={{ p: 4, bgcolor: '#fff', color: '#000', fontFamily: 'serif' }}>
-                <Box sx={{ textAlign: 'center', mb: 4 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold' }}>ใบเสนอราคา (QUOTATION)</Typography>
-                    <Typography variant="subtitle1">{printQuotation?.id}</Typography>
+            <Box id="printable-quotation" sx={{ p: 4, bgcolor: '#fff', color: '#000', fontSize: '13px', lineBreak: 'anywhere' }}>
+                {/* Header Row */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                        <Box sx={{ width: 60, height: 60, bgcolor: '#f0f4f8', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <ShoppingCartIcon sx={{ fontSize: 40, color: '#333' }} />
+                        </Box>
+                        <Box>
+                            <Typography sx={{ fontWeight: 'bold', fontSize: '20px', color: '#000' }}>{printQuotation?.sellerName}</Typography>
+                        </Box>
+                    </Box>
+                    <Typography sx={{ fontSize: '30px', color: '#4472c4', fontWeight: 'bold' }}>ใบเสนอราคา</Typography>
                 </Box>
 
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4 }}>
-                    <Box>
-                        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>ผู้ขาย (Seller):</Typography>
-                        <Typography>{printQuotation?.sellerName}</Typography>
-                        <Typography>เลขเสียภาษี: 0105560000000</Typography>
+                {/* Seller Detail & Doc Info */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                    <Box sx={{ maxWidth: '60%' }}>
+                        <Typography sx={{ fontSize: '12px', mb: 0.5 }}>{printQuotation?.sellerAddress}</Typography>
+                        <Typography sx={{ fontSize: '12px' }}>โทร. : {printQuotation?.sellerPhone} เลขที่ผู้เสียภาษี : 0-1111-11111-11-1</Typography>
                     </Box>
-                    <Box sx={{ textAlign: 'right' }}>
-                        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>ลูกค้า (Buyer):</Typography>
-                        <Typography>{printQuotation?.buyerName}</Typography>
-                        <Typography>เลขเสียภาษี: {printQuotation?.buyerTaxId}</Typography>
+                    <Box>
+                        <Box sx={{ display: 'flex', gap: 5 }}>
+                            <Typography sx={{ fontWeight: 'bold' }}>วันที่เอกสาร</Typography>
+                            <Typography>{printQuotation?.orderDate}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 5 }}>
+                            <Typography sx={{ fontWeight: 'bold' }}>เลขที่ใบเสนอราคา</Typography>
+                            <Typography>{printQuotation?.id}</Typography>
+                        </Box>
+                         <Box sx={{ display: 'flex', gap: 5 }}>
+                            <Typography sx={{ fontWeight: 'bold' }}>รหัสลูกค้า</Typography>
+                            <Typography>ABC123</Typography>
+                        </Box>
                     </Box>
                 </Box>
 
-                <Divider sx={{ mb: 2 }} />
-
-                <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell sx={{ fontWeight: 'bold' }}>รายการ (Description)</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>จำนวน (Qty)</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>ราคาหน่วยละ (Unit Price)</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>รวมเงิน (Amount)</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        <TableRow>
-                            <TableCell>{printQuotation?.productName}</TableCell>
-                            <TableCell align="right">{printQuotation?.quantity}</TableCell>
-                            <TableCell align="right">฿{printQuotation?.pricePerUnit.toLocaleString()}</TableCell>
-                            <TableCell align="right">฿{printQuotation?.totalPrice.toLocaleString()}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                            <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>รวมทั้งสิ้น (Grand Total)</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>฿{printQuotation?.totalPrice.toLocaleString()}</TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
-
-                <Box sx={{ mt: 6, display: 'flex', justifyContent: 'space-between' }}>
-                    <Box>
-                        <Typography>วันที่ออก (Date): {printQuotation?.orderDate}</Typography>
-                        <Typography>วันที่สิ้นสุด (Expiry): {printQuotation?.expiryDate}</Typography>
+                {/* Buyer Sections */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                    <Box sx={{ border: '1px solid #ddd', p: 1, width: '48%', borderRadius: 1 }}>
+                        <Typography sx={{ fontWeight: 'bold', mb: 1 }}>ใบเสนอราคาสำหรับ</Typography>
+                        <Stack spacing={0.5}>
+                            <Box sx={{ display: 'flex' }}>
+                                <Typography sx={{ minWidth: 80, fontSize: '11px' }}>ชื่อลูกค้า :</Typography>
+                                <Typography sx={{ fontSize: '11px' }}>{printQuotation?.buyerName}</Typography>
+                            </Box>
+                             <Box sx={{ display: 'flex' }}>
+                                <Typography sx={{ minWidth: 80, fontSize: '11px' }}>ชื่อบริษัท :</Typography>
+                                <Typography sx={{ fontSize: '11px' }}>{printQuotation?.buyerName} Co., Ltd.</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex' }}>
+                                <Typography sx={{ minWidth: 80, fontSize: '11px' }}>ที่อยู่ :</Typography>
+                                <Typography sx={{ fontSize: '11px' }}>-</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex' }}>
+                                <Typography sx={{ minWidth: 80, fontSize: '11px' }}>โทรศัพท์ :</Typography>
+                                <Typography sx={{ fontSize: '11px' }}>-</Typography>
+                            </Box>
+                             <Box sx={{ display: 'flex' }}>
+                                <Typography sx={{ minWidth: 80, fontSize: '11px' }}>เลขภาษี :</Typography>
+                                <Typography sx={{ fontSize: '11px' }}>{printQuotation?.buyerTaxId}</Typography>
+                            </Box>
+                        </Stack>
                     </Box>
-                    <Box sx={{ textAlign: 'center', borderTop: '1px solid #000', width: 200, mt: 4 }}>
-                        <Typography sx={{ mt: 1 }}>ผู้มีอำนาจลงนาม</Typography>
+                    <Box sx={{ width: '48%' }}>
+                         <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
+                            <Typography sx={{ fontWeight: 'bold' }}>ใบเสนอราคาใช้ได้จนถึง:</Typography>
+                            <Typography>{printQuotation?.expiryDate}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                            <Typography sx={{ fontWeight: 'bold' }}>จัดทำโดย:</Typography>
+                            <Typography>{printQuotation?.salesPerson}</Typography>
+                        </Box>
+                    </Box>
+                </Box>
+
+                <Typography sx={{ fontWeight: 'bold', mb: 1 }}>พนักงานขาย : {printQuotation?.salesPerson}</Typography>
+
+                {/* Main Table */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}>
+                    <thead>
+                        <tr style={{ backgroundColor: '#cfe2f3' }}>
+                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>เลขที่</th>
+                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>รายการ</th>
+                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>จำนวน/หน่วย</th>
+                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>ราคา/หน่วย</th>
+                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>ส่วนลด</th>
+                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>จำนวนเงิน</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style={{ height: '30px' }}>
+                            <td style={{ border: '1px solid #aaa', padding: '5px', textAlign: 'center' }}>1</td>
+                            <td style={{ border: '1px solid #aaa', padding: '5px' }}>{printQuotation?.productName}</td>
+                            <td style={{ border: '1px solid #aaa', padding: '5px', textAlign: 'center' }}>{printQuotation?.quantity}</td>
+                            <td style={{ border: '1px solid #aaa', padding: '5px', textAlign: 'right' }}>฿ {(printQuotation?.pricePerUnit || 0).toLocaleString()}</td>
+                            <td style={{ border: '1px solid #aaa', padding: '5px', textAlign: 'right' }}>฿ {(printQuotation?.discountPerUnit || 0).toLocaleString()}</td>
+                            <td style={{ border: '1px solid #aaa', padding: '5px', textAlign: 'right' }}>฿ {(printQuotation?.subtotal || printQuotation?.totalPrice || 0).toLocaleString()}</td>
+                        </tr>
+                        {/* Fill empty rows */}
+                        {[...Array(6)].map((_, i) => (
+                            <tr key={i} style={{ height: '30px' }}>
+                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
+                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
+                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
+                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
+                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
+                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                {/* Summary Section */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box>
+                         <Typography sx={{ fontWeight: 'bold' }}>จำนวนเงิน: {numberToThaiWords(printQuotation?.grandTotal || 0)}</Typography>
+                         <Box sx={{ mt: 5 }}>
+                            <Typography>การชำระเงิน: {printQuotation?.paymentTerm}</Typography>
+                         </Box>
+                    </Box>
+                    <Box sx={{ width: '35%' }}>
+                        <Stack spacing={0.5}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography sx={{ fontWeight: 'bold' }}>รวมเป็นเงิน</Typography>
+                                <Typography>฿ {(printQuotation?.subtotal || printQuotation?.totalPrice || 0).toLocaleString()}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography sx={{ fontWeight: 'bold' }}>หักส่วนลดพิเศษ {printQuotation?.specialDiscountPercent || 0}%</Typography>
+                                <Typography>฿ {((printQuotation?.subtotal || 0) - (printQuotation?.totalAfterDiscount || 0)).toLocaleString()}</Typography>
+                            </Box>
+                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography sx={{ fontWeight: 'bold' }}>ยอดรวมหลังหักส่วนลด</Typography>
+                                <Typography>฿ {(printQuotation?.totalAfterDiscount || printQuotation?.totalPrice || 0).toLocaleString()}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography sx={{ fontWeight: 'bold' }}>ภาษีมูลค่าเพิ่ม 7%</Typography>
+                                <Typography>฿ {(printQuotation?.vatAmount || 0).toLocaleString()}</Typography>
+                            </Box>
+                             <Box sx={{ display: 'flex', justifyContent: 'space-between', bgcolor: '#cfe2f3', p: 0.5 }}>
+                                <Typography sx={{ fontWeight: 'bold' }}>ผลรวม</Typography>
+                                <Typography sx={{ fontWeight: 'bold' }}>฿ {(printQuotation?.grandTotal || printQuotation?.totalPrice || 0).toLocaleString()}</Typography>
+                            </Box>
+                        </Stack>
                     </Box>
                 </Box>
             </Box>
@@ -508,7 +695,7 @@ export default function DocumentTable() {
                   </TableCell>
                   <TableCell align="right" sx={{ color: 'text.secondary' }}>{row.quantity}</TableCell>
                   <TableCell align="right" sx={{ color: 'text.primary', fontFamily: 'monospace' }}>
-                    ฿{row.totalPrice.toLocaleString()}
+                    ฿{(row.grandTotal ?? row.totalPrice ?? 0).toLocaleString()}
                   </TableCell>
                   <TableCell align="right" sx={{ color: 'text.secondary' }}>{row.orderDate}</TableCell>
                   <TableCell align="right" sx={{ color: 'text.secondary' }}>{row.expiryDate}</TableCell>
