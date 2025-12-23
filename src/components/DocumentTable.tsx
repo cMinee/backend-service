@@ -31,6 +31,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import EditIcon from '@mui/icons-material/Edit';
 import { motion } from 'framer-motion';
 
 // Mock Data
@@ -67,6 +68,7 @@ export default function DocumentTable() {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [fullQuotations, setFullQuotations] = useState<Quotation[]>([]);
   const [openQTModal, setOpenQTModal] = useState(false);
+  const [editingQT, setEditingQT] = useState<Quotation | null>(null);
   
   // Form States
   const [selectedCustomer, setSelectedCustomer] = useState<{name: string, taxId: string} | null>(null);
@@ -136,6 +138,28 @@ export default function DocumentTable() {
   };
 
   const handleOpenQTModal = () => {
+    setEditingQT(null);
+    setOpenQTModal(true);
+  };
+
+  const handleEditClick = (qt: Quotation) => {
+    setEditingQT(qt);
+    
+    // Set Form States
+    const customer = customers.find(c => c.name === qt.buyerName) || { name: qt.buyerName, taxId: qt.buyerTaxId };
+    setSelectedCustomer(customer);
+    setCustomerInput(qt.buyerName);
+    
+    const product = initialInventoryData.find(p => p.productName === qt.productName) || null;
+    setSelectedProduct(product);
+    
+    setQtQuantity(qt.quantity);
+    setDiscountPerUnit(qt.discountPerUnit || 0);
+    setSpecialDiscountPercent(qt.specialDiscountPercent || 0);
+    setBuyerAddress(qt.buyerAddress || '');
+    setSellerName(qt.sellerName);
+    setPaymentTerm(qt.paymentTerm || '60 วัน');
+    
     setOpenQTModal(true);
   };
 
@@ -147,6 +171,7 @@ export default function DocumentTable() {
     setCustomerInput('');
     setDiscountPerUnit(0);
     setSpecialDiscountPercent(0);
+    setEditingQT(null);
   };
 
   const calculatePricing = () => {
@@ -198,7 +223,7 @@ export default function DocumentTable() {
 
     const pricing = calculatePricing();
     const newQT: Quotation = {
-      id: `QT-${Date.now().toString().slice(-6)}`,
+      id: editingQT ? editingQT.id : `QT-${Date.now().toString().slice(-6)}`,
       buyerName: buyer.name,
       buyerTaxId: buyer.taxId,
       buyerAddress: buyerAddress,
@@ -211,9 +236,9 @@ export default function DocumentTable() {
       totalAfterDiscount: pricing.totalAfterDiscount,
       vatAmount: pricing.vatAmount,
       grandTotal: pricing.grandTotal,
-      orderDate: now.toISOString().split('T')[0],
+      orderDate: editingQT ? editingQT.orderDate : now.toISOString().split('T')[0],
       expiryDate: expiry.toISOString().split('T')[0],
-      status: 'Pending',
+      status: editingQT ? editingQT.status : 'Pending',
       sellerName: sellerName,
       sellerAddress: sellerAddress,
       sellerPhone: sellerPhone,
@@ -221,10 +246,21 @@ export default function DocumentTable() {
       paymentTerm: paymentTerm
     };
 
-    // Save to local state
-    const updatedFull = [newQT, ...fullQuotations];
+    let updatedFull: Quotation[];
+    if (editingQT) {
+        updatedFull = fullQuotations.map(q => q.id === editingQT.id ? newQT : q);
+    } else {
+        updatedFull = [newQT, ...fullQuotations];
+    }
+
     setFullQuotations(updatedFull);
-    setQuotations([newQT, ...quotations]);
+    // Re-apply current filters to show update if necessary
+    setQuotations(prev => {
+        if (editingQT) {
+            return prev.map(q => q.id === editingQT.id ? newQT : q);
+        }
+        return [newQT, ...prev];
+    });
 
     // Save to API (Mocked persistence via endpoint if exists, else it stays in memory)
     try {
@@ -298,7 +334,9 @@ export default function DocumentTable() {
         fullWidth
         PaperProps={{ style: { borderRadius: 16 } }}
       >
-        <DialogTitle sx={{ fontWeight: 'bold' }}>สร้างใบเสนอราคาใหม่ (Create New Quotation)</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+            {editingQT ? `แก้ไขใบเสนอราคา (Edit Quotation: ${editingQT.id})` : 'สร้างใบเสนอราคาใหม่ (Create New Quotation)'}
+        </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={3} sx={{ mt: 1 }}>
             <TextField 
@@ -311,7 +349,10 @@ export default function DocumentTable() {
             <Autocomplete
                 freeSolo
                 options={customers}
+                value={selectedCustomer}
+                inputValue={customerInput}
                 getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
+                isOptionEqualToValue={(option, value) => option.name === value.name}
                 onInputChange={(event, newInputValue) => {
                     setCustomerInput(newInputValue);
                 }}
@@ -329,7 +370,9 @@ export default function DocumentTable() {
 
             <Autocomplete
                 options={initialInventoryData}
+                value={selectedProduct}
                 getOptionLabel={(option) => `${option.productName} (${option.brand}) - ฿${option.price}`}
+                isOptionEqualToValue={(option, value) => option.id === value?.id}
                 onChange={(event, newValue) => setSelectedProduct(newValue)}
                 renderInput={(params) => (
                     <TextField {...params} label="เลือกสินค้า (Select Product)" required />
@@ -716,6 +759,13 @@ export default function DocumentTable() {
                                 <PrintIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
+                        {row.status !== 'PO Created' && (
+                            <Tooltip title="Edit Quotation">
+                                <IconButton size="small" onClick={() => handleEditClick(row)}>
+                                    <EditIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
                         {row.status !== 'PO Created' && (
                             <Tooltip title="Create Purchase Order (PO)">
                                 <IconButton size="small" color="primary" onClick={() => createPOFromQT(row)}>
