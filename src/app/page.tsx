@@ -1,32 +1,65 @@
 'use client';
-import { Typography, Container, Box, Card, CardContent, Grid, Paper } from '@mui/material';
+import { Typography, Container, Box, Card, CardContent, Grid, Paper, Chip, Stack } from '@mui/material';
 import { motion } from 'framer-motion';
 import StorageIcon from '@mui/icons-material/Storage';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import PendingIcon from '@mui/icons-material/Pending';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,  PieChart, Pie, Cell } from 'recharts';
 import { useState, useEffect } from 'react';
 
 // Interfaces (Matches your DB structure)
-interface PurchaseTransaction {
+interface InventoryItem {
   id: string;
-  buyerName: string;
+  sku: string;
   productName: string;
+  brand: string;
   quantity: number;
-  netPrice: number;
-  orderDate: string;
-  status: 'Paid' | 'Unpaid';
+  price: number;
+  initialQuantity?: number;
 }
 
-const COLORS = ['#00C49F', '#FF8042'];
+interface Quotation {
+  id: string;
+  status: 'Pending' | 'PO Created';
+  grandTotal: number;
+}
+
+interface PurchaseTransaction {
+    id: string;
+    buyerName: string;
+    productName: string;
+    quantity: number;
+    netPrice: number;
+    orderDate: string;
+    status: 'Paid' | 'Unpaid';
+}
+
+interface ChartDatePoint {
+    date: string;
+    amount: number;
+}
+
+interface ChartStatusPoint {
+    name: string;
+    value: number;
+}
+
+interface TopProduct {
+    name: string;
+    totalQuantity: number;
+    totalRevenue: number;
+}
+
+const COLORS = ['#00C49F', '#FF8042', '#0088FE', '#FFBB28'];
 
 const StatCard = ({ title, value, icon, color, delay }: { title: string, value: string, icon: React.ReactNode, color: string, delay: number }) => (
     <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay }}
+        style={{ height: '100%' }}
     >
         <Card sx={{ height: '100%', position: 'relative', overflow: 'hidden', borderRadius: 4, background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.05)' }}>
             <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.1, transform: 'rotate(15deg) scale(1.5)', color: color }}>
@@ -45,23 +78,27 @@ const StatCard = ({ title, value, icon, color, delay }: { title: string, value: 
 );
 
 export default function Dashboard() {
-  const [data, setData] = useState<PurchaseTransaction[]>([]);
-  const [dateData, setDateData] = useState<any[]>([]);
-  const [statusData, setStatusData] = useState<any[]>([]);
+  const [dateData, setDateData] = useState<ChartDatePoint[]>([]);
+  const [statusData, setStatusData] = useState<ChartStatusPoint[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
   const [paidOrders, setPaidOrders] = useState(0);
   const [unpaidOrders, setUnpaidOrders] = useState(0);
+  
+  // New States
+  const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
+  const [pendingQT, setPendingQT] = useState(0);
+  const [poCreatedQT, setPoCreatedQT] = useState(0);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
 
   useEffect(() => {
+    // Fetch Purchases
     fetch('/api/purchases')
         .then(res => res.json())
         .then((items: PurchaseTransaction[]) => {
             if (!Array.isArray(items)) return;
             
-            setData(items);
 
-            // Calculate Stats
             const revenue = items.reduce((sum, item) => sum + item.netPrice, 0);
             const tOrders = items.length;
             const pOrders = items.filter(item => item.status === 'Paid').length;
@@ -72,15 +109,12 @@ export default function Dashboard() {
             setPaidOrders(pOrders);
             setUnpaidOrders(uOrders);
 
-            // Prepare Chart Data
-            // 1. Status Pie Chart
             setStatusData([
                 { name: 'Paid', value: pOrders },
                 { name: 'Unpaid', value: uOrders },
             ]);
 
-            // 2. Revenue Trend Bar Chart
-            const dData = items.reduce((acc: any[], item) => {
+            const dData = items.reduce((acc: ChartDatePoint[], item) => {
                 const existing = acc.find(x => x.date === item.orderDate);
                 if (existing) {
                     existing.amount += item.netPrice;
@@ -88,11 +122,51 @@ export default function Dashboard() {
                     acc.push({ date: item.orderDate, amount: item.netPrice });
                 }
                 return acc;
-            }, []).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            }, []).sort((a: ChartDatePoint, b: ChartDatePoint) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
             setDateData(dData);
+
+            // Calculate Best Sellers
+            const bestSellers = items.reduce((acc: Record<string, { qty: number, rev: number }>, item) => {
+                if (!acc[item.productName]) {
+                    acc[item.productName] = { qty: 0, rev: 0 };
+                }
+                acc[item.productName].qty += item.quantity;
+                acc[item.productName].rev += item.netPrice;
+                return acc;
+            }, {});
+
+            const top3 = Object.entries(bestSellers)
+                .map(([name, data]) => ({ name, totalQuantity: data.qty, totalRevenue: data.rev }))
+                .sort((a, b) => b.totalQuantity - a.totalQuantity)
+                .slice(0, 3);
+
+            setTopProducts(top3);
         })
-        .catch(err => console.error("Failed to fetch dashboard data:", err));
+        .catch(err => console.error("Failed to fetch purchase data:", err));
+
+    // Fetch Inventory for Low Stock
+    fetch('/api/inventory')
+        .then(res => res.json())
+        .then((items: InventoryItem[]) => {
+            if (!Array.isArray(items)) return;
+            const lowStock = items.filter(item => {
+                if (!item.initialQuantity) return item.quantity < 20; // Default threshold
+                return item.quantity <= (item.initialQuantity * 0.2);
+            });
+            setLowStockItems(lowStock);
+        })
+        .catch(err => console.error("Failed to fetch inventory data:", err));
+
+    // Fetch Quotations for Status
+    fetch('/api/quotations')
+        .then(res => res.json())
+        .then((items: Quotation[]) => {
+            if (!Array.isArray(items)) return;
+            setPendingQT(items.filter(q => q.status === 'Pending').length);
+            setPoCreatedQT(items.filter(q => q.status === 'PO Created').length);
+        })
+        .catch(err => console.error("Failed to fetch quotation data:", err));
   }, []);
 
   return (
@@ -109,7 +183,7 @@ export default function Dashboard() {
 
         {/* Stats Grid */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 6 }}>
                 <StatCard 
                     title="Total Revenue" 
                     value={`฿${totalRevenue.toLocaleString()}`} 
@@ -118,7 +192,7 @@ export default function Dashboard() {
                     delay={0}
                 />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                 <StatCard 
                     title="Total Orders" 
                     value={totalOrders.toString()} 
@@ -127,28 +201,28 @@ export default function Dashboard() {
                     delay={0.1}
                 />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                 <StatCard 
-                    title="Paid Orders" 
-                    value={paidOrders.toString()} 
-                    icon={<TrendingUpIcon sx={{ fontSize: 100 }} />} 
-                    color="#00C49F" // Success Green
+                    title="Quotations Sent" 
+                    value={pendingQT.toString()} 
+                    icon={<StorageIcon sx={{ fontSize: 100 }} />} 
+                    color="#0088FE" // Blue
                     delay={0.2}
                 />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                 <StatCard 
-                    title="Pending Payment" 
-                    value={unpaidOrders.toString()} 
-                    icon={<PendingIcon sx={{ fontSize: 100 }} />} 
-                    color="#FF8042" // Warning Orange
+                    title="PO Created" 
+                    value={poCreatedQT.toString()} 
+                    icon={<CheckCircleIcon sx={{ fontSize: 100 }} />} 
+                    color="#00C49F" // Green
                     delay={0.3}
                 />
             </Grid>
         </Grid>
 
-        {/* Charts Section */}
-        <Grid container spacing={3}>
+        {/* Charts and Low Stock Section */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
             {/* Revenue Trend Chart */}
             <Grid size={{ xs: 12, md: 8 }}>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
@@ -177,7 +251,7 @@ export default function Dashboard() {
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
                     <Paper sx={{ p: 3, borderRadius: 4, background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.05)', height: 400, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                          <Typography variant="h6" gutterBottom sx={{ alignSelf: 'flex-start', mb: 2 }}>
-                            Order Status
+                            Payment Status
                         </Typography>
                          <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
@@ -201,13 +275,102 @@ export default function Dashboard() {
                         <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Box sx={{ w: 12, h: 12, borderRadius: '50%', background: COLORS[0], width: 12, height: 12 }} />
-                                <Typography variant="body2">Paid</Typography>
+                                <Typography variant="body2">Paid ({paidOrders})</Typography>
                              </Box>
                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Box sx={{ w: 12, h: 12, borderRadius: '50%', background: COLORS[1], width: 12, height: 12 }} />
-                                <Typography variant="body2">Unpaid</Typography>
+                                <Typography variant="body2">Unpaid ({unpaidOrders})</Typography>
                              </Box>
                         </Box>
+                    </Paper>
+                </motion.div>
+            </Grid>
+        </Grid>
+
+        {/* Alerts and Insights Section */}
+        <Grid container spacing={3}>
+            {/* Low Stock Items Section */}
+            <Grid size={{ xs: 12, md: 6 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.6 }}>
+                    <Paper sx={{ p: 3, borderRadius: 4, background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.05)', height: '100%' }}>
+                        <Typography variant="h6" gutterBottom color="error.main" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                            <StorageIcon /> Low Stock Alert (Remaining &lt; 20%)
+                        </Typography>
+                        {lowStockItems.length > 0 ? (
+                            <Stack spacing={2}>
+                                {lowStockItems.map((item) => (
+                                    <Card key={item.id} variant="outlined" sx={{ borderRadius: 2, borderLeft: '5px solid #d32f2f' }}>
+                                        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                                            <Typography variant="subtitle1" fontWeight="bold">
+                                                {item.productName}
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Stock: <strong>{item.quantity}</strong> / {item.initialQuantity || 'N/A'}
+                                                </Typography>
+                                                <Chip 
+                                                    label={`${Math.round((item.quantity / (item.initialQuantity || 1)) * 100)}%`} 
+                                                    size="small" 
+                                                    color="error" 
+                                                    variant="outlined"
+                                                />
+                                            </Box>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </Stack>
+                        ) : (
+                            <Box sx={{ py: 4, textAlign: 'center' }}>
+                                <Typography color="text.secondary">
+                                    All products are in healthy stock levels.
+                                </Typography>
+                            </Box>
+                        )}
+                    </Paper>
+                </motion.div>
+            </Grid>
+
+            {/* Best Sellers Section */}
+            <Grid size={{ xs: 12, md: 6 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.7 }}>
+                    <Paper sx={{ p: 3, borderRadius: 4, background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.05)', height: '100%' }}>
+                        <Typography variant="h6" gutterBottom color="primary.main" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                            <LocalFireDepartmentIcon color="error" /> Top 3 Best Selling Products
+                        </Typography>
+                        {topProducts.length > 0 ? (
+                            <Stack spacing={2}>
+                                {topProducts.map((product, index) => (
+                                    <Card key={product.name} variant="outlined" sx={{ borderRadius: 2, borderLeft: `5px solid ${COLORS[index % COLORS.length]}` }}>
+                                        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Box>
+                                                    <Typography variant="subtitle1" fontWeight="bold">
+                                                        {product.name}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Total Revenue: ฿{product.totalRevenue.toLocaleString()}
+                                                    </Typography>
+                                                </Box>
+                                                <Box sx={{ textAlign: 'right' }}>
+                                                    <Typography variant="h6" fontWeight="bold" color="primary">
+                                                        {product.totalQuantity}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Units Sold
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </Stack>
+                        ) : (
+                            <Box sx={{ py: 4, textAlign: 'center' }}>
+                                <Typography color="text.secondary">
+                                    No sales data available yet.
+                                </Typography>
+                            </Box>
+                        )}
                     </Paper>
                 </motion.div>
             </Grid>

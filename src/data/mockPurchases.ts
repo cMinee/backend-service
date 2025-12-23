@@ -7,6 +7,7 @@ export interface PurchaseTransaction {
   orderDate: string;
   status: 'Paid' | 'Unpaid';
   paymentSlip?: string;
+  poFile?: string; // Storing filename or base64
 }
 
 export const initialData: PurchaseTransaction[] = [

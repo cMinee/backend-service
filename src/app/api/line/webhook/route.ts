@@ -97,35 +97,52 @@ const handleTextMessage = async (text: string, replyToken: string) => {
             replyText = `ไม่พบยอดขายสำหรับวันที่ ${targetDate} ครับ`;
         } else {
             const totalDaily = dailyOrders.reduce((sum, item) => sum + item.netPrice, 0);
-             const orderList = dailyOrders
+            const orderList = dailyOrders
                 .map((item, index) => `${index + 1}. ${item.productName} - ${formatMoney(item.netPrice)}`)
                 .join('\n');
             replyText = `📅 ยอดขายวันที่ ${targetDate}\n\n${orderList}\n\nรวมยอดขาย: ${formatMoney(totalDaily)}`;
         }
 
-    } else {
-        // 4. Product Search (Fuzzy Match)
+    } else if (text.includes('เช็คสินค้าใกล้หมด') || text.includes('สินค้าใกล้หมด')) {
+        // 4. Low Stock Alert
         const inventory = getInventory();
-        const searchTerms = text.toLowerCase().split(/\s+/); // Split by space
+        const lowStock = inventory.filter(item => {
+            const threshold = item.initialQuantity ? item.initialQuantity * 0.2 : 20;
+            return item.quantity <= threshold;
+        });
 
-        // Filter items that match ALL search terms in (Name + Brand + SKU)
+        if (lowStock.length === 0) {
+            replyText = '✅ สินค้าทุกรายการยังมีสต็อกเพียงพอครับ';
+        } else {
+            const list = lowStock
+                .map(item => `- ${item.productName}: เหลือ ${item.quantity} (จาก ${item.initialQuantity || 'N/A'})`)
+                .join('\n');
+            replyText = `⚠️ รายการสินค้าใกล้หมด (น้อยกว่า 20%):\n\n${list}`;
+        }
+
+    } else {
+        // 5. Product Search (Fuzzy Match)
+        const inventory = getInventory();
+        
+        // Clean text: remove prefix "สต็อก" or "check" if present to improve matching
+        let cleanText = text.toLowerCase().replace(/^สต็อก\s*/, '').replace(/^check\s*/, '').trim();
+        const searchTerms = cleanText.split(/\s+/);
+
         const matchedItems = inventory.filter(item => {
             const itemText = `${item.productName} ${item.brand} ${item.sku}`.toLowerCase();
             return searchTerms.every(term => itemText.includes(term));
         });
 
         if (matchedItems.length > 0) {
-            // Found items
             if (matchedItems.length === 1) {
                 const item = matchedItems[0];
-                replyText = `🔎 พบสินค้า:\n\nชื่อ: ${item.productName}\nยี่ห้อ: ${item.brand}\nSKU: ${item.sku}\nราคา: ${formatMoney(item.price)}\nคงเหลือ: ${item.quantity} ชิ้น`;
+                replyText = `🔎 ข้อมูลสต็อก:\n\nสินค้า: ${item.productName}\nคงเหลือ: ✨ ${item.quantity} ชิ้น ✨\nราคา: ${formatMoney(item.price)}\nSKU: ${item.sku}`;
             } else {
-                 const list = matchedItems.slice(0, 5).map(item => `- ${item.productName} (${item.brand}) เหลือ ${item.quantity}`).join('\n');
-                 replyText = `🔎 เจอหลายรายการ (${matchedItems.length}):\n\n${list}\n\n(แสดงมากสุด 5 รายการ)`;
+                 const list = matchedItems.slice(0, 5).map(item => `- ${item.productName}: ${item.quantity} ชิ้น`).join('\n');
+                 replyText = `🔎 พบสินค้าใกล้เคียง (${matchedItems.length}):\n\n${list}${matchedItems.length > 5 ? '\n...' : ''}`;
             }
         } else {
-             // 5. Default Helper Message (Not found)
-             replyText = `ผมไม่เข้าใจคำสั่งครับ 😅 หรือค้นหาไม่เจอ\n\nลองพิมพ์ชื่อสินค้าเพื่อเช็คสต็อก เช่น "Monitor Dell"\n\nหรือสั่งซื้อสินค้า:\nชื่อ\nซื้อ [ชื่อสินค้า]\nจำนวน [จำนวน]`;
+             replyText = `ผมไม่เข้าใจคำสั่งครับ 😅 หรือค้นหาไม่เจอ\n\nลองพิมพ์ เช่น:\n- "สินค้าใกล้หมด"\n- "สต็อก [ชื่อสินค้า]"\n- "ยอดขายวันนี้"\n- "ยอดค้าง"`;
         }
     }
 

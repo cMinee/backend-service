@@ -5,12 +5,6 @@ import {
   Box,
   Typography,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   Chip,
   IconButton,
@@ -22,27 +16,25 @@ import {
   DialogActions,
   TextField,
   Select,
+  Stack,
   MenuItem,
   InputLabel,
   FormControl,
-  Stack,
-  // Grid is not used in the final clean version or if used can be kept
 } from '@mui/material';
 import PaymentsIcon from '@mui/icons-material/Payments';
-import SearchIcon from '@mui/icons-material/Search';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import DescriptionIcon from '@mui/icons-material/Description';
 import * as XLSX from 'xlsx';
+import { motion } from 'framer-motion';
 
 // ...
 import { PurchaseTransaction, initialData } from '@/data/mockPurchases';
-import { motion } from 'framer-motion';
-
-const ComponentContainer = motion(Paper);
+import GenericTable, { Column } from '@/components/common/GenericTable';
+import PageHeader from '@/components/common/PageHeader';
+import FilterSection from '@/components/common/FilterSection';
 
 export default function PurchaseTable() {
   const [data, setData] = useState<PurchaseTransaction[]>(initialData);
@@ -129,16 +121,16 @@ export default function PurchaseTable() {
             const wb = XLSX.read(bstr, { type: 'binary' });
             const wsname = wb.SheetNames[0];
             const ws = wb.Sheets[wsname];
-            const jsonData = XLSX.utils.sheet_to_json(ws) as any[];
+            const jsonData = XLSX.utils.sheet_to_json(ws) as Record<string, string | number>[];
             
-            const newTransactions: PurchaseTransaction[] = jsonData.map((row: any, index: number) => ({
+            const newTransactions: PurchaseTransaction[] = jsonData.map((row, index) => ({
                 id: `imported-${Date.now()}-${index}`,
-                buyerName: row['Buyer'] || row['Buyer Name'] || row['ผู้ซื้อ'] || 'Unknown',
-                productName: row['Product'] || row['Product Name'] || row['สินค้า'] || 'Unknown Item',
+                buyerName: String(row['Buyer'] || row['Buyer Name'] || row['ผู้ซื้อ'] || 'Unknown'),
+                productName: String(row['Product'] || row['Product Name'] || row['สินค้า'] || 'Unknown Item'),
                 quantity: Number(row['Qty'] || row['Quantity'] || row['จำนวน'] || 1),
                 netPrice: Number(row['Net Price'] || row['Price'] || row['ราคาสุทธิ'] || 0),
-                orderDate: row['Order Date'] || row['Date'] || row['วันที่สั่งซื้อ'] || new Date().toISOString().split('T')[0],
-                status: (row['Status'] || row['สถานะ'] || 'Unpaid') === 'Paid' ? 'Paid' : 'Unpaid'
+                orderDate: String(row['Order Date'] || row['Date'] || row['วันที่สั่งซื้อ'] || new Date().toISOString().split('T')[0]),
+                status: (String(row['Status'] || row['สถานะ'] || 'Unpaid')) === 'Paid' ? 'Paid' : 'Unpaid'
             }));
 
             // 1. Send ONLY new transactions to the import API
@@ -244,6 +236,83 @@ export default function PurchaseTable() {
 
     handleClosePaymentModal();
   };
+
+  const handleViewPO = (row: PurchaseTransaction) => {
+    if (!row.poFile) return;
+    // Open base64 file in new window
+    const newWindow = window.open();
+    if (newWindow) {
+        newWindow.document.write(`<iframe src="${row.poFile}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+    }
+  };
+
+  const columns: Column<PurchaseTransaction>[] = [
+    {
+        id: 'buyerName',
+        label: 'ผู้ซื้อ (Buyer)',
+        cellSx: { color: 'text.primary', fontWeight: 500 }
+    },
+    {
+        id: 'productName',
+        label: 'สินค้า (Product)',
+        cellSx: { color: 'text.secondary' }
+    },
+    {
+        id: 'quantity',
+        label: 'จำนวน (Qty)',
+        align: 'right',
+        cellSx: { color: 'text.secondary' }
+    },
+    {
+        id: 'netPrice',
+        label: 'ราคาสุทธิ (Net Price)',
+        align: 'right',
+        cellSx: { color: 'text.primary', fontFamily: 'monospace' },
+        render: (row) => `฿${row.netPrice.toLocaleString()}`
+    },
+    {
+        id: 'orderDate',
+        label: 'วันที่สั่งซื้อ (Date)',
+        align: 'right',
+        cellSx: { color: 'text.secondary' }
+    },
+    {
+        id: 'status',
+        label: 'สถานะ (Status)',
+        align: 'center',
+        render: (row) => (
+            <Chip
+                icon={row.status === 'Paid' ? <CheckCircleIcon /> : <AccessTimeIcon />}
+                label={row.status}
+                size="small"
+                color={row.status === 'Paid' ? 'success' : 'warning'}
+                variant="outlined"
+                sx={{ borderRadius: '8px' }}
+            />
+        )
+    },
+    {
+        id: 'actions',
+        label: 'Actions',
+        align: 'center',
+        render: (row) => (
+            <Stack direction="row" spacing={1} justifyContent="center">
+                {row.poFile && (
+                    <Tooltip title="View Customer PO">
+                        <IconButton size="small" onClick={() => handleViewPO(row)} color="info">
+                            <DescriptionIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                )}
+                <Tooltip title="Upload Payment Evidence">
+                    <IconButton size="small" onClick={() => handlePaymentClick(row)} color={row.status === 'Paid' ? 'success' : 'primary'}>
+                        <PaymentsIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+            </Stack>
+        )
+    }
+  ];
 
   return (
     <Box sx={{ width: '100%', p: 2 }}>
@@ -365,181 +434,77 @@ export default function PurchaseTable() {
       </Dialog>
 
       {/* Header Section */}
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          mb: 4,
-          flexWrap: 'wrap',
-          gap: 2
-        }}
-      >
-        <Box>
-          <Typography 
-            variant="h4" 
-            sx={{ 
-              fontWeight: 700, 
-              background: 'linear-gradient(45deg, #1976d2, #9c27b0)', 
-              WebkitBackgroundClip: 'text', 
-              WebkitTextFillColor: 'transparent',
-              mb: 1
-            }}
-          >
-            รายการซื้อ (Purchase Items)
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage your purchase transactions imported from Excel
-          </Typography>
-        </Box>
-
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<CloudDownloadIcon />}
-            onClick={handleExport}
-            sx={{ 
-              borderColor: 'rgba(0,0,0,0.1)',
-              color: 'text.primary',
-              '&:hover': { borderColor: 'secondary.main', background: 'rgba(156, 39, 176, 0.05)' }
-            }}
-          >
-            Export
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<CloudUploadIcon />}
-            onClick={handleImportClick}
-            sx={{
-               boxShadow: '0 4px 12px rgba(33, 150, 243, 0.3)',
-            }}
-          >
-            Import Excel
-          </Button>
-        </Box>
-      </Box>
+      <PageHeader
+        title="รายการซื้อ (Purchase Items)"
+        subtitle="Manage your purchase transactions imported from Excel"
+        gradient="linear-gradient(45deg, #1976d2, #9c27b0)"
+        actions={
+          <>
+            <Button
+                variant="outlined"
+                startIcon={<CloudDownloadIcon />}
+                onClick={handleExport}
+                sx={{ 
+                borderColor: 'rgba(0,0,0,0.1)',
+                color: 'text.primary',
+                '&:hover': { borderColor: 'secondary.main', background: 'rgba(156, 39, 176, 0.05)' }
+                }}
+            >
+                Export
+            </Button>
+            <Button
+                variant="contained"
+                color="primary"
+                startIcon={<CloudUploadIcon />}
+                onClick={handleImportClick}
+                sx={{
+                boxShadow: '0 4px 12px rgba(33, 150, 243, 0.3)',
+                }}
+            >
+                Import Excel
+            </Button>
+          </>
+        }
+      />
 
       {/* Filter Section */}
-      <Paper sx={{ p: 3, mb: 3, borderRadius: 1, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.05)' }}>
-        <Typography variant="subtitle2" sx={{ mb: 2, display: 'block', fontWeight: 600, color: 'text.secondary' }}>Filter & Search</Typography>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
+      <FilterSection onSearch={handleSearch} onReset={handleResetFilter}>
+        <TextField 
+            label="Search Buyer" 
+            variant="outlined" 
+            size="small"
+            value={searchBuyer}
+            onChange={(e) => setSearchBuyer(e.target.value)}
+            sx={{ minWidth: 200 }}
+        />
             <TextField 
-                label="Search Buyer" 
-                variant="outlined" 
-                size="small"
-                value={searchBuyer}
-                onChange={(e) => setSearchBuyer(e.target.value)}
-                sx={{ minWidth: 200 }}
-            />
-             <TextField 
-                label="Search Product" 
-                variant="outlined" 
-                size="small"
-                value={searchProduct}
-                onChange={(e) => setSearchProduct(e.target.value)}
-                sx={{ minWidth: 200 }}
-            />
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-                <InputLabel>Status</InputLabel>
-                <Select
-                    value={filterStatus}
-                    label="Status"
-                    onChange={(e) => setFilterStatus(e.target.value as any)}
-                >
-                    <MenuItem value="All">All Status</MenuItem>
-                    <MenuItem value="Paid">Paid</MenuItem>
-                    <MenuItem value="Unpaid">Unpaid</MenuItem>
-                </Select>
-            </FormControl>
-            
-            <Box sx={{ flexGrow: 1 }} />
-
-            <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={handleResetFilter} color="secondary">
-                Reset
-            </Button>
-             <Button variant="contained" startIcon={<SearchIcon />} onClick={handleSearch} color="primary">
-                Search
-            </Button>
-        </Stack>
-      </Paper>
+            label="Search Product" 
+            variant="outlined" 
+            size="small"
+            value={searchProduct}
+            onChange={(e) => setSearchProduct(e.target.value)}
+            sx={{ minWidth: 200 }}
+        />
+        <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Status</InputLabel>
+            <Select
+                value={filterStatus}
+                label="Status"
+                onChange={(e) => setFilterStatus(e.target.value as any)}
+            >
+                <MenuItem value="All">All Status</MenuItem>
+                <MenuItem value="Paid">Paid</MenuItem>
+                <MenuItem value="Unpaid">Unpaid</MenuItem>
+            </Select>
+        </FormControl>
+      </FilterSection>
 
       {/* Table Section */}
-      <ComponentContainer
-        elevation={0}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        sx={{ 
-          background: 'rgba(255, 255, 255, 0.8)', 
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(0,0,0,0.05)',
-          borderRadius: 1,
-          overflow: 'hidden',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
-        }}
-      >
-        <TableContainer>
-          <Table sx={{ minWidth: 650 }} aria-label="purchase table">
-            <TableHead>
-              <TableRow sx={{ background: 'rgba(0,0,0,0.02)' }}>
-                <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>ผู้ซื้อ (Buyer)</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>สินค้า (Product)</TableCell>
-                <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>จำนวน (Qty)</TableCell>
-                <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>ราคาสุทธิ (Net Price)</TableCell>
-                <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>วันที่สั่งซื้อ (Date)</TableCell>
-                <TableCell align="center" sx={{ color: 'text.secondary', fontWeight: 600 }}>สถานะ (Status)</TableCell>
-                <TableCell align="center" sx={{ color: 'text.secondary', fontWeight: 600 }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.map((row, index) => (
-                <TableRow
-                  key={row.id}
-                  component={motion.tr}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: index * 0.1 }}
-                  sx={{ 
-                    '&:last-child td, &:last-child th': { border: 0 },
-                    '&:hover': { background: 'rgba(0,0,0,0.02)' },
-                    transition: 'background 0.2s'
-                  }}
-                >
-                  <TableCell component="th" scope="row" sx={{ color: 'text.primary', fontWeight: 500 }}>
-                    {row.buyerName}
-                  </TableCell>
-                  <TableCell sx={{ color: 'text.secondary' }}>
-                    {row.productName}
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary' }}>{row.quantity}</TableCell>
-                  <TableCell align="right" sx={{ color: 'text.primary', fontFamily: 'monospace' }}>
-                    ฿{row.netPrice.toLocaleString()}
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary' }}>{row.orderDate}</TableCell>
-                  <TableCell align="center">
-                    <Chip
-                      icon={row.status === 'Paid' ? <CheckCircleIcon /> : <AccessTimeIcon />}
-                      label={row.status}
-                      size="small"
-                      color={row.status === 'Paid' ? 'success' : 'warning'}
-                      variant="outlined"
-                      sx={{ borderRadius: '8px' }}
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Tooltip title="Upload Payment Evidence">
-                        <IconButton size="small" onClick={() => handlePaymentClick(row)} color={row.status === 'Paid' ? 'success' : 'primary'}>
-                            <PaymentsIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                   </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </ComponentContainer>
+      <GenericTable
+        data={data}
+        columns={columns}
+        emptyMessage="ไม่พบรายการซื้อ"
+      />
     </Box>
   );
 }

@@ -11,9 +11,9 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Paper,
   IconButton,
-  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -33,6 +33,9 @@ import * as XLSX from 'xlsx';
 import { InventoryItem, initialInventoryData } from '@/data/mockInventory';
 import { motion } from 'framer-motion';
 import DeleteConfirm from '@/components/common/DeleteConfirm';
+import GenericTable, { Column } from '@/components/common/GenericTable';
+import PageHeader from '@/components/common/PageHeader';
+import FilterSection from '@/components/common/FilterSection';
 
 const ComponentContainer = motion(Paper);
 
@@ -210,6 +213,68 @@ export default function InventoryTable() {
       handleCloseDeleteModal();
   };
 
+  const columns: Column<InventoryItem>[] = [
+    {
+        id: 'id',
+        label: 'ID',
+        cellSx: { color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.875rem' }
+    },
+    {
+        id: 'sku',
+        label: 'SKU',
+        cellSx: { color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.875rem' }
+    },
+    {
+        id: 'productName',
+        label: 'ชื่อสินค้า (Product)',
+        cellSx: { color: 'text.primary', fontWeight: 500 }
+    },
+    {
+        id: 'brand',
+        label: 'ยี่ห้อ (Brand)',
+        cellSx: { color: 'text.secondary' }
+    },
+    {
+        id: 'quantity',
+        label: 'จำนวน (Qty)',
+        align: 'right',
+        cellSx: { color: 'text.primary', fontWeight: 'bold' }
+    },
+    {
+        id: 'price',
+        label: 'ราคาต่อหน่วย (Unit Price)',
+        align: 'right',
+        cellSx: { color: 'text.secondary', fontFamily: 'monospace' },
+        render: (row) => `฿${row.price.toLocaleString()}`
+    },
+    {
+        id: 'totalPrice',
+        label: 'ราคาสุทธิ (Total Price)',
+        align: 'right',
+        cellSx: { color: 'primary.main', fontWeight: 'bold', fontFamily: 'monospace' },
+        render: (row) => `฿${(row.price * row.quantity).toLocaleString()}`
+    },
+    {
+        id: 'actions',
+        label: 'Actions',
+        align: 'center',
+        render: (row) => (
+            <>
+                <Tooltip title="Edit Item">
+                    <IconButton size="small" color="primary" onClick={() => handleEditClick(row)}>
+                        <EditIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete Item">
+                    <IconButton size="small" color="error" onClick={() => handleDeleteClick(row)}>
+                        <DeleteIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+            </>
+        )
+    }
+  ];
+
   return (
     <Box sx={{ width: '100%', p: 2 }}>
       {/* Import Modal */}
@@ -329,184 +394,81 @@ export default function InventoryTable() {
         itemName={itemToDelete?.productName}
       />
 
-      {/* Header Section */}
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          mb: 4,
-          flexWrap: 'wrap',
-          gap: 2
-        }}
-      >
-        <Box>
-          <Typography 
-            variant="h4" 
-            sx={{ 
-              fontWeight: 700, 
-              background: 'linear-gradient(45deg, #00b09b, #96c93d)', 
-              WebkitBackgroundClip: 'text', 
-              WebkitTextFillColor: 'transparent',
-              mb: 1
-            }}
-          >
-            รายการสินค้าเข้า (Inventory / Stock In)
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage your incoming goods and inventory stock
-          </Typography>
-        </Box>
+      <DeleteConfirm
+        open={deleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDelete}
+        itemName={itemToDelete?.productName}
+      />
 
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<CloudDownloadIcon />}
-            onClick={handleExport}
-            sx={{ 
-              borderColor: 'rgba(0,0,0,0.1)',
-              color: 'text.primary',
-              '&:hover': { borderColor: '#96c93d', background: 'rgba(150, 201, 61, 0.05)' }
-            }}
-          >
-            Export
-          </Button>
-          <Button
-            variant="contained"
-            color="success"
-            startIcon={<CloudUploadIcon />}
-            onClick={handleImportClick}
-            sx={{
-               background: 'linear-gradient(45deg, #00b09b, #96c93d)',
-               boxShadow: '0 4px 12px rgba(150, 201, 61, 0.3)',
-            }}
-          >
-            Import Excel
-          </Button>
-        </Box>
-      </Box>
+      {/* Header Section */}
+      <PageHeader
+        title="รายการสินค้าเข้า (Inventory / Stock In)"
+        subtitle="Manage your incoming goods and inventory stock"
+        gradient="linear-gradient(45deg, #00b09b, #96c93d)"
+        actions={
+          <>
+            <Button
+                variant="outlined"
+                startIcon={<CloudDownloadIcon />}
+                onClick={handleExport}
+                sx={{ 
+                borderColor: 'rgba(0,0,0,0.1)',
+                color: 'text.primary',
+                '&:hover': { borderColor: '#96c93d', background: 'rgba(150, 201, 61, 0.05)' }
+                }}
+            >
+                Export
+            </Button>
+            <Button
+                variant="contained"
+                color="success"
+                startIcon={<CloudUploadIcon />}
+                onClick={handleImportClick}
+                sx={{
+                background: 'linear-gradient(45deg, #00b09b, #96c93d)',
+                boxShadow: '0 4px 12px rgba(150, 201, 61, 0.3)',
+                }}
+            >
+                Import Excel
+            </Button>
+          </>
+        }
+      />
 
       {/* Filter Section */}
-      <Paper sx={{ p: 3, mb: 3, borderRadius: 1, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.05)' }}>
-        <Typography variant="subtitle2" sx={{ mb: 2, display: 'block', fontWeight: 600, color: 'text.secondary' }}>Filter & Search</Typography>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
+      <FilterSection onSearch={handleSearch} onReset={handleResetFilter}>
+        <TextField 
+            label="Search Product" 
+            variant="outlined" 
+            size="small"
+            value={searchProduct}
+            onChange={(e) => setSearchProduct(e.target.value)}
+            sx={{ minWidth: 200 }}
+            InputProps={{
+                startAdornment: (
+                    <InputAdornment position="start">
+                    <SearchIcon fontSize="small" color="action" />
+                    </InputAdornment>
+                ),
+            }}
+        />
             <TextField 
-                label="Search Product" 
-                variant="outlined" 
-                size="small"
-                value={searchProduct}
-                onChange={(e) => setSearchProduct(e.target.value)}
-                sx={{ minWidth: 200 }}
-                InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" color="action" />
-                      </InputAdornment>
-                    ),
-                }}
-            />
-             <TextField 
-                label="Search Brand" 
-                variant="outlined" 
-                size="small"
-                value={searchBrand}
-                onChange={(e) => setSearchBrand(e.target.value)}
-                sx={{ minWidth: 200 }}
-            />
-            
-            <Box sx={{ flexGrow: 1 }} />
-
-            <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={handleResetFilter} color="secondary">
-                Reset
-            </Button>
-             <Button variant="contained" onClick={handleSearch} color="primary" sx={{ background: '#00b09b' }}>
-                Search
-            </Button>
-        </Stack>
-      </Paper>
+            label="Search Brand" 
+            variant="outlined" 
+            size="small"
+            value={searchBrand}
+            onChange={(e) => setSearchBrand(e.target.value)}
+            sx={{ minWidth: 200 }}
+        />
+      </FilterSection>
 
       {/* Table Section */}
-      <ComponentContainer
-        elevation={0}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        sx={{ 
-          background: 'rgba(255, 255, 255, 0.8)', 
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(0,0,0,0.05)',
-          borderRadius: 1,
-          overflow: 'hidden',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
-        }}
-      >
-        <TableContainer>
-          <Table sx={{ minWidth: 650 }} aria-label="inventory table">
-            <TableHead>
-              <TableRow sx={{ background: 'rgba(0,0,0,0.02)' }}>
-                <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>ID</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>SKU</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>ชื่อสินค้า (Product)</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>ยี่ห้อ (Brand)</TableCell>
-                <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>จำนวน (Qty)</TableCell>
-                <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>ราคาต่อหน่วย (Unit Price)</TableCell>
-                <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>ราคาสุทธิ (Total Price)</TableCell>
-                <TableCell align="center" sx={{ color: 'text.secondary', fontWeight: 600 }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.map((row, index) => (
-                <TableRow
-                  key={row.id}
-                  component={motion.tr}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: index * 0.1 }}
-                  sx={{ 
-                    '&:last-child td, &:last-child th': { border: 0 },
-                    '&:hover': { background: 'rgba(0,0,0,0.02)' },
-                    transition: 'background 0.2s'
-                  }}
-                >
-                  <TableCell component="th" scope="row" sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                    {row.id}
-                  </TableCell>
-                  <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                    {row.sku}
-                  </TableCell>
-                  <TableCell sx={{ color: 'text.primary', fontWeight: 500 }}>
-                    {row.productName}
-                  </TableCell>
-                  <TableCell sx={{ color: 'text.secondary' }}>
-                    {row.brand}
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: 'text.primary', fontWeight: 'bold' }}>
-                    {row.quantity}
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
-                    ฿{row.price.toLocaleString()}
-                  </TableCell>
-                   <TableCell align="right" sx={{ color: 'primary.main', fontWeight: 'bold', fontFamily: 'monospace' }}>
-                    ฿{(row.price * row.quantity).toLocaleString()}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Tooltip title="Edit Item">
-                        <IconButton size="small" color="primary" onClick={() => handleEditClick(row)}>
-                            <EditIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete Item">
-                        <IconButton size="small" color="error" onClick={() => handleDeleteClick(row)}>
-                            <DeleteIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                   </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </ComponentContainer>
+      <GenericTable
+        data={data}
+        columns={columns}
+        emptyMessage="ไม่พบรายการสินค้า"
+      />
     </Box>
   );
 }
