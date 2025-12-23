@@ -5,12 +5,6 @@ import {
   Box,
   Typography,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   Chip,
   IconButton,
@@ -18,21 +12,25 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   TextField,
   Stack,
   Autocomplete,
   Divider,
+  InputAdornment,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PrintIcon from '@mui/icons-material/Print';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import SearchIcon from '@mui/icons-material/Search';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import EditIcon from '@mui/icons-material/Edit';
 import { motion } from 'framer-motion';
+import GenericTable, { Column } from '@/components/common/GenericTable';
+import PageHeader from '@/components/common/PageHeader';
+import FilterSection from '@/components/common/FilterSection';
 
 // Mock Data
 import { InventoryItem, initialInventoryData } from '@/data/mockInventory';
@@ -61,8 +59,6 @@ export interface Quotation {
   paymentTerm?: string;
   totalPrice?: number; // Legacy support
 }
-
-const ComponentContainer = motion(Paper);
 
 export default function DocumentTable() {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -324,9 +320,96 @@ export default function DocumentTable() {
     }
   }, [fullQuotations]);
 
+  const columns: Column<Quotation>[] = [
+    {
+        id: 'id',
+        label: 'QT ID',
+        cellSx: { fontWeight: 'bold', color: 'primary.main' }
+    },
+    {
+        id: 'buyerName',
+        label: 'ลูกค้า (Buyer)',
+        cellSx: { color: 'text.primary', fontWeight: 500 }
+    },
+    {
+        id: 'productName',
+        label: 'สินค้า (Product)',
+        cellSx: { color: 'text.secondary' }
+    },
+    {
+        id: 'quantity',
+        label: 'จำนวน (Qty)',
+        align: 'right',
+        cellSx: { color: 'text.secondary' }
+    },
+    {
+        id: 'grandTotal',
+        label: 'ยอดรวม (Total)',
+        align: 'right',
+        cellSx: { color: 'text.primary', fontFamily: 'monospace' },
+        render: (row) => `฿${(row.grandTotal ?? row.totalPrice ?? 0).toLocaleString()}`
+    },
+    {
+        id: 'orderDate',
+        label: 'วันที่ออก (Date)',
+        align: 'right',
+        cellSx: { color: 'text.secondary' }
+    },
+    {
+        id: 'expiryDate',
+        label: 'หมดอายุ (Expiry)',
+        align: 'right',
+        cellSx: { color: 'text.secondary' }
+    },
+    {
+        id: 'status',
+        label: 'สถานะ (Status)',
+        align: 'center',
+        render: (row) => (
+            <Chip
+                icon={row.status === 'PO Created' ? <CheckCircleIcon /> : <AccessTimeIcon />}
+                label={row.status}
+                size="small"
+                color={row.status === 'PO Created' ? 'success' : 'info'}
+                variant="outlined"
+                sx={{ borderRadius: '8px' }}
+            />
+        )
+    },
+    {
+        id: 'actions',
+        label: 'Actions',
+        align: 'center',
+        render: (row) => (
+            <Stack direction="row" spacing={1} justifyContent="center">
+                <Tooltip title="See/Print Quotation">
+                    <IconButton size="small" onClick={() => { setPrintQuotation(row); setOpenPrintDialog(true); }}>
+                        <PrintIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+                {row.status !== 'PO Created' && (
+                    <Tooltip title="Edit Quotation">
+                        <IconButton size="small" onClick={() => handleEditClick(row)}>
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                )}
+                {row.status !== 'PO Created' && (
+                    <Tooltip title="Create Purchase Order (PO)">
+                        <IconButton size="small" color="primary" onClick={() => createPOFromQT(row)}>
+                            <ShoppingCartIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                )}
+            </Stack>
+        )
+    }
+  ];
+
   return (
     <Box sx={{ width: '100%', p: 2 }}>
       {/* Create QT Modal */}
+      {/* ... (keep existing Dialog components) ... */}
       <Dialog 
         open={openQTModal} 
         onClose={handleCloseQTModal}
@@ -607,188 +690,59 @@ export default function DocumentTable() {
       </Dialog>
 
       {/* Header Section */}
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          mb: 4,
-          flexWrap: 'wrap',
-          gap: 2
-        }}
-      >
-        <Box>
-          <Typography 
-            variant="h4" 
-            sx={{ 
-              fontWeight: 700, 
-              background: 'linear-gradient(45deg, #1976d2, #9c27b0)', 
-              WebkitBackgroundClip: 'text', 
-              WebkitTextFillColor: 'transparent',
-              mb: 1
-            }}
-          >
-            การจัดการเอกสาร (Document Management)
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage quotations and generate purchase orders
-          </Typography>
-        </Box>
-
-        <Box sx={{ display: 'flex', gap: 2 }}>
+      <PageHeader
+        title="ใบเสนอราคา (Sales Quotation)"
+        subtitle="Create and manage your sales quotations for customers"
+        gradient="linear-gradient(45deg, #12c2e9, #c471ed, #f64f59)"
+        actions={
           <Button
             variant="contained"
-            color="primary"
             startIcon={<AddIcon />}
             onClick={handleOpenQTModal}
             sx={{
-               boxShadow: '0 4px 12px rgba(33, 150, 243, 0.3)',
-               borderRadius: '10px'
+              background: 'linear-gradient(45deg, #12c2e9, #c471ed)',
+              boxShadow: '0 4px 12px rgba(196, 113, 237, 0.3)',
             }}
           >
             New QT
           </Button>
-        </Box>
-      </Box>
+        }
+      />
 
       {/* Filter Section */}
-      <Paper sx={{ p: 3, mb: 3, borderRadius: 1, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.05)' }}>
-        <Typography variant="subtitle2" sx={{ mb: 2, display: 'block', fontWeight: 600, color: 'text.secondary' }}>Filter & Search</Typography>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
-            <TextField 
-                label="Search Buyer" 
-                variant="outlined" 
-                size="small"
-                value={searchBuyer}
-                onChange={(e) => setSearchBuyer(e.target.value)}
-                sx={{ minWidth: 200 }}
-            />
-             <TextField 
-                label="Search Product" 
-                variant="outlined" 
-                size="small"
-                value={searchProduct}
-                onChange={(e) => setSearchProduct(e.target.value)}
-                sx={{ minWidth: 200 }}
-            />
-            
-            <Box sx={{ flexGrow: 1 }} />
-
-            <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={handleResetFilter} color="secondary">
-                Reset
-            </Button>
-             <Button variant="contained" startIcon={<SearchIcon />} onClick={handleSearch} color="primary">
-                Search
-            </Button>
-        </Stack>
-      </Paper>
+      <FilterSection onSearch={handleSearch} onReset={handleResetFilter}>
+        <TextField
+          label="Search Buyer"
+          variant="outlined"
+          size="small"
+          value={searchBuyer}
+          onChange={(e) => setSearchBuyer(e.target.value)}
+          sx={{ minWidth: 200 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" color="action" />
+              </InputAdornment>
+            ),
+          }}
+        />
+        <TextField
+          label="Search Product"
+          variant="outlined"
+          size="small"
+          value={searchProduct}
+          onChange={(e) => setSearchProduct(e.target.value)}
+          sx={{ minWidth: 200 }}
+        />
+      </FilterSection>
 
       {/* Table Section */}
-      <ComponentContainer
-        elevation={0}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        sx={{ 
-          background: 'rgba(255, 255, 255, 0.8)', 
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(0,0,0,0.05)',
-          borderRadius: 1,
-          overflow: 'hidden',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
-        }}
-      >
-        <TableContainer>
-          <Table sx={{ minWidth: 650 }} aria-label="quotation table">
-            <TableHead>
-              <TableRow sx={{ background: 'rgba(0,0,0,0.02)' }}>
-                <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>QT ID</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>ลูกค้า (Buyer)</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>สินค้า (Product)</TableCell>
-                <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>จำนวน (Qty)</TableCell>
-                <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>ยอดรวม (Total)</TableCell>
-                <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>วันที่ออก (Date)</TableCell>
-                <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>หมดอายุ (Expiry)</TableCell>
-                <TableCell align="center" sx={{ color: 'text.secondary', fontWeight: 600 }}>สถานะ (Status)</TableCell>
-                <TableCell align="center" sx={{ color: 'text.secondary', fontWeight: 600 }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {quotations.map((row, index) => (
-                <TableRow
-                  key={row.id}
-                  component={motion.tr}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: index * 0.1 }}
-                  sx={{ 
-                    '&:last-child td, &:last-child th': { border: 0 },
-                    '&:hover': { background: 'rgba(0,0,0,0.02)' },
-                    transition: 'background 0.2s'
-                  }}
-                >
-                  <TableCell sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                    {row.id}
-                  </TableCell>
-                  <TableCell component="th" scope="row" sx={{ color: 'text.primary', fontWeight: 500 }}>
-                    {row.buyerName}
-                  </TableCell>
-                  <TableCell sx={{ color: 'text.secondary' }}>
-                    {row.productName}
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary' }}>{row.quantity}</TableCell>
-                  <TableCell align="right" sx={{ color: 'text.primary', fontFamily: 'monospace' }}>
-                    ฿{(row.grandTotal ?? row.totalPrice ?? 0).toLocaleString()}
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary' }}>{row.orderDate}</TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary' }}>{row.expiryDate}</TableCell>
-                  <TableCell align="center">
-                    <Chip
-                      icon={row.status === 'PO Created' ? <CheckCircleIcon /> : <AccessTimeIcon />}
-                      label={row.status}
-                      size="small"
-                      color={row.status === 'PO Created' ? 'success' : 'info'}
-                      variant="outlined"
-                      sx={{ borderRadius: '8px' }}
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Stack direction="row" spacing={1} justifyContent="center">
-                        <Tooltip title="See/Print Quotation">
-                            <IconButton size="small" onClick={() => { setPrintQuotation(row); setOpenPrintDialog(true); }}>
-                                <PrintIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        {row.status !== 'PO Created' && (
-                            <Tooltip title="Edit Quotation">
-                                <IconButton size="small" onClick={() => handleEditClick(row)}>
-                                    <EditIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                        {row.status !== 'PO Created' && (
-                            <Tooltip title="Create Purchase Order (PO)">
-                                <IconButton size="small" color="primary" onClick={() => createPOFromQT(row)}>
-                                    <ShoppingCartIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                    </Stack>
-                   </TableCell>
-                </TableRow>
-              ))}
-              {quotations.length === 0 && (
-                <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 8 }}>
-                        <Typography color="text.secondary">ยังไม่มีข้อมูลใบเสนอราคา</Typography>
-                    </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </ComponentContainer>
-      
+      <GenericTable
+        data={quotations}
+        columns={columns}
+        emptyMessage="ยังไม่มีข้อมูลใบเสนอราคา"
+      />
+
       <style jsx global>{`
         @media print {
             body * {
