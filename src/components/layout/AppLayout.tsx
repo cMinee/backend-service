@@ -27,6 +27,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import StorageIcon from '@mui/icons-material/Storage';
+import EditDocumentIcon from '@mui/icons-material/EditDocument';
 import PersonIcon from '@mui/icons-material/Person';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -43,6 +44,7 @@ const MENU_ITEMS = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
   { text: 'Purchases', icon: <ShoppingCartIcon />, path: '/purchases' },
   { text: 'Inventory', icon: <StorageIcon />, path: '/inventory' },
+  { text: 'Document', icon: <EditDocumentIcon />, path: '/document' },
 ];
 
 export default function AppLayout({ children }: AppLayoutProps) {

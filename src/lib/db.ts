@@ -21,8 +21,23 @@ export interface InventoryItem {
   price: number;
 }
 
+export interface Quotation {
+  id: string;
+  buyerName: string;
+  buyerTaxId: string;
+  productName: string;
+  quantity: number;
+  pricePerUnit: number;
+  totalPrice: number;
+  orderDate: string;
+  expiryDate: string;
+  status: 'Pending' | 'PO Created';
+  sellerName: string;
+}
+
 const purchasesDbPath = path.join(process.cwd(), 'src/data/db.json');
 const inventoryDbPath = path.join(process.cwd(), 'src/data/inventory.json');
+const quotationsDbPath = path.join(process.cwd(), 'src/data/quotation.json');
 
 // Ensure DB files exist
 if (!fs.existsSync(purchasesDbPath)) {
@@ -39,6 +54,10 @@ if (!fs.existsSync(inventoryDbPath)) {
     { id: '5', sku: 'ANK-H7-005', productName: 'USB-C Hub', brand: 'Anker', quantity: 200, price: 850 },
   ];
   fs.writeFileSync(inventoryDbPath, JSON.stringify(initialInventory, null, 2));
+}
+
+if (!fs.existsSync(quotationsDbPath)) {
+  fs.writeFileSync(quotationsDbPath, '[]');
 }
 
 // Purchases Functions
@@ -79,6 +98,29 @@ export function saveInventory(data: InventoryItem[]): boolean {
     return true;
   } catch (error) {
     console.error('Error writing to inventory.json', error);
+    return false;
+  }
+}
+
+// Quotation Functions
+export function getQuotations(): Quotation[] {
+  try {
+    if (!fs.existsSync(quotationsDbPath)) return [];
+    const data = fs.readFileSync(quotationsDbPath, 'utf8');
+    if (!data.trim()) return [];
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading quotation.json', error);
+    return [];
+  }
+}
+
+export function saveQuotations(data: Quotation[]): boolean {
+  try {
+    fs.writeFileSync(quotationsDbPath, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error writing to quotation.json', error);
     return false;
   }
 }
