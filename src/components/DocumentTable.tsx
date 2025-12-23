@@ -19,6 +19,7 @@ import {
   Autocomplete,
   Divider,
   InputAdornment,
+  styled,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PrintIcon from '@mui/icons-material/Print';
@@ -35,6 +36,33 @@ import FilterSection from '@/components/common/FilterSection';
 
 // Mock Data
 import { InventoryItem, initialInventoryData } from '@/data/mockInventory';
+
+// Styled components for printable quotation
+const PrintTable = styled('table')({
+  width: '100%',
+  borderCollapse: 'collapse',
+  marginBottom: '10px',
+});
+
+const PrintTableRow = styled('tr')<{ bgColor?: string }>(({ bgColor }) => ({
+  backgroundColor: bgColor || 'transparent',
+  height: '30px',
+}));
+
+const PrintTableHeader = styled('th')({
+  border: '1px solid #aaa',
+  padding: '5px',
+});
+
+const PrintTableCell = styled('td')<{ align?: 'left' | 'center' | 'right' }>(({ align }) => ({
+  border: '1px solid #aaa',
+  padding: '5px',
+  textAlign: align || 'left',
+}));
+
+const HiddenInput = styled('input')({
+  display: 'none',
+});
 
 export interface Quotation {
   id: string;
@@ -650,39 +678,39 @@ export default function DocumentTable() {
                 <Typography sx={{ fontWeight: 'bold', mb: 1 }}>พนักงานขาย : {printQuotation?.salesPerson}</Typography>
 
                 {/* Main Table */}
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}>
+                <PrintTable>
                     <thead>
-                        <tr style={{ backgroundColor: '#cfe2f3' }}>
-                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>เลขที่</th>
-                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>รายการ</th>
-                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>จำนวน/หน่วย</th>
-                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>ราคา/หน่วย</th>
-                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>ส่วนลด</th>
-                            <th style={{ border: '1px solid #aaa', padding: '5px' }}>จำนวนเงิน</th>
-                        </tr>
+                        <PrintTableRow bgColor="#cfe2f3">
+                            <PrintTableHeader>เลขที่</PrintTableHeader>
+                            <PrintTableHeader>รายการ</PrintTableHeader>
+                            <PrintTableHeader>จำนวน/หน่วย</PrintTableHeader>
+                            <PrintTableHeader>ราคา/หน่วย</PrintTableHeader>
+                            <PrintTableHeader>ส่วนลด</PrintTableHeader>
+                            <PrintTableHeader>จำนวนเงิน</PrintTableHeader>
+                        </PrintTableRow>
                     </thead>
                     <tbody>
-                        <tr style={{ height: '30px' }}>
-                            <td style={{ border: '1px solid #aaa', padding: '5px', textAlign: 'center' }}>1</td>
-                            <td style={{ border: '1px solid #aaa', padding: '5px' }}>{printQuotation?.productName}</td>
-                            <td style={{ border: '1px solid #aaa', padding: '5px', textAlign: 'center' }}>{printQuotation?.quantity}</td>
-                            <td style={{ border: '1px solid #aaa', padding: '5px', textAlign: 'right' }}>฿ {(printQuotation?.pricePerUnit || 0).toLocaleString()}</td>
-                            <td style={{ border: '1px solid #aaa', padding: '5px', textAlign: 'right' }}>฿ {(printQuotation?.discountPerUnit || 0).toLocaleString()}</td>
-                            <td style={{ border: '1px solid #aaa', padding: '5px', textAlign: 'right' }}>฿ {(printQuotation?.subtotal || printQuotation?.totalPrice || 0).toLocaleString()}</td>
-                        </tr>
+                        <PrintTableRow>
+                            <PrintTableCell align="center">1</PrintTableCell>
+                            <PrintTableCell>{printQuotation?.productName}</PrintTableCell>
+                            <PrintTableCell align="center">{printQuotation?.quantity}</PrintTableCell>
+                            <PrintTableCell align="right">฿ {(printQuotation?.pricePerUnit || 0).toLocaleString()}</PrintTableCell>
+                            <PrintTableCell align="right">฿ {(printQuotation?.discountPerUnit || 0).toLocaleString()}</PrintTableCell>
+                            <PrintTableCell align="right">฿ {(printQuotation?.subtotal || printQuotation?.totalPrice || 0).toLocaleString()}</PrintTableCell>
+                        </PrintTableRow>
                         {/* Fill empty rows */}
                         {[...Array(6)].map((_, i) => (
-                            <tr key={i} style={{ height: '30px' }}>
-                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
-                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
-                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
-                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
-                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
-                                <td style={{ border: '1px solid #aaa', padding: '5px' }}></td>
-                            </tr>
+                            <PrintTableRow key={i}>
+                                <PrintTableCell></PrintTableCell>
+                                <PrintTableCell></PrintTableCell>
+                                <PrintTableCell></PrintTableCell>
+                                <PrintTableCell></PrintTableCell>
+                                <PrintTableCell></PrintTableCell>
+                                <PrintTableCell></PrintTableCell>
+                            </PrintTableRow>
                         ))}
                     </tbody>
-                </table>
+                </PrintTable>
 
                 {/* Summary Section */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -766,12 +794,13 @@ export default function DocumentTable() {
                     '&:hover': { bgcolor: 'rgba(0,0,0,0.05)' }
                 }}
             >
-                <input
+                <HiddenInput
                     accept="application/pdf"
-                    style={{ display: 'none' }}
                     id="po-file-input"
                     type="file"
                     onChange={handleFileChange}
+                    title="Upload PDF File"
+                    placeholder="Upload PDF File"
                 />
                 <Box component="label" htmlFor="po-file-input" sx={{ width: '100%', cursor: 'pointer', display: 'block' }}>
                      {!poFile ? (

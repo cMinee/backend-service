@@ -5,6 +5,7 @@
     "productName": "Wireless Headphones",
     "brand": "Sony",
     "quantity": 40,
+    "initialQuantity": 50,
     "price": 2995
   },
   {
@@ -13,6 +14,7 @@
     "productName": "Mechanical Keyboard",
     "brand": "Keychron",
     "quantity": 30,
+    "initialQuantity": 100,
     "price": 3200
   },
   {
@@ -21,6 +23,7 @@
     "productName": "Gaming Mouse",
     "brand": "Logitech",
     "quantity": 95,
+    "initialQuantity": 100,
     "price": 1150
   },
   {
@@ -29,6 +32,7 @@
     "productName": "27\" 4K Monitor",
     "brand": "Dell",
     "quantity": 10,
+    "initialQuantity": 60,
     "price": 12500
   },
   {
@@ -37,6 +41,7 @@
     "productName": "USB-C Hub",
     "brand": "Anker",
     "quantity": 200,
+    "initialQuantity": 200,
     "price": 850
   }
 ]

@@ -19,6 +19,7 @@ export interface InventoryItem {
   brand: string;
   quantity: number;
   price: number;
+  initialQuantity?: number;
 }
 
 export interface Quotation {
