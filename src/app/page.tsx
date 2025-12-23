@@ -1,10 +1,11 @@
 'use client';
-import { Typography, Container, Box, Card, CardContent, Grid, Paper, Chip } from '@mui/material';
+import { Typography, Container, Box, Card, CardContent, Grid, Paper, Chip, Stack } from '@mui/material';
 import { motion } from 'framer-motion';
 import StorageIcon from '@mui/icons-material/Storage';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,  PieChart, Pie, Cell } from 'recharts';
 import { useState, useEffect } from 'react';
 
@@ -45,6 +46,12 @@ interface ChartStatusPoint {
     value: number;
 }
 
+interface TopProduct {
+    name: string;
+    totalQuantity: number;
+    totalRevenue: number;
+}
+
 const COLORS = ['#00C49F', '#FF8042', '#0088FE', '#FFBB28'];
 
 const StatCard = ({ title, value, icon, color, delay }: { title: string, value: string, icon: React.ReactNode, color: string, delay: number }) => (
@@ -82,6 +89,7 @@ export default function Dashboard() {
   const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
   const [pendingQT, setPendingQT] = useState(0);
   const [poCreatedQT, setPoCreatedQT] = useState(0);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
 
   useEffect(() => {
     // Fetch Purchases
@@ -117,6 +125,23 @@ export default function Dashboard() {
             }, []).sort((a: ChartDatePoint, b: ChartDatePoint) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
             setDateData(dData);
+
+            // Calculate Best Sellers
+            const bestSellers = items.reduce((acc: Record<string, { qty: number, rev: number }>, item) => {
+                if (!acc[item.productName]) {
+                    acc[item.productName] = { qty: 0, rev: 0 };
+                }
+                acc[item.productName].qty += item.quantity;
+                acc[item.productName].rev += item.netPrice;
+                return acc;
+            }, {});
+
+            const top3 = Object.entries(bestSellers)
+                .map(([name, data]) => ({ name, totalQuantity: data.qty, totalRevenue: data.rev }))
+                .sort((a, b) => b.totalQuantity - a.totalQuantity)
+                .slice(0, 3);
+
+            setTopProducts(top3);
         })
         .catch(err => console.error("Failed to fetch purchase data:", err));
 
@@ -262,46 +287,94 @@ export default function Dashboard() {
             </Grid>
         </Grid>
 
-        {/* Low Stock Items Section */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.6 }}>
-            <Paper sx={{ p: 3, borderRadius: 4, background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.05)' }}>
-                <Typography variant="h6" gutterBottom color="error.main" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-                    <StorageIcon /> Low Stock Alert (Remaining &lt; 20%)
-                </Typography>
-                {lowStockItems.length > 0 ? (
-                    <Grid container spacing={2}>
-                        {lowStockItems.map((item) => (
-                            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item.id}>
-                                <Card variant="outlined" sx={{ borderRadius: 2, borderLeft: '5px solid #d32f2f' }}>
-                                    <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
-                                        <Typography variant="subtitle1" fontWeight="bold">
-                                            {item.productName}
-                                        </Typography>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Stock: <strong>{item.quantity}</strong> / {item.initialQuantity || 'N/A'}
-                                            </Typography>
-                                            <Chip 
-                                                label={`${Math.round((item.quantity / (item.initialQuantity || 1)) * 100)}%`} 
-                                                size="small" 
-                                                color="error" 
-                                                variant="outlined"
-                                            />
-                                        </Box>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
-                        ))}
-                    </Grid>
-                ) : (
-                    <Box sx={{ py: 4, textAlign: 'center' }}>
-                        <Typography color="text.secondary">
-                            All products are in healthy stock levels.
+        {/* Alerts and Insights Section */}
+        <Grid container spacing={3}>
+            {/* Low Stock Items Section */}
+            <Grid size={{ xs: 12, md: 6 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.6 }}>
+                    <Paper sx={{ p: 3, borderRadius: 4, background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.05)', height: '100%' }}>
+                        <Typography variant="h6" gutterBottom color="error.main" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                            <StorageIcon /> Low Stock Alert (Remaining &lt; 20%)
                         </Typography>
-                    </Box>
-                )}
-            </Paper>
-        </motion.div>
+                        {lowStockItems.length > 0 ? (
+                            <Stack spacing={2}>
+                                {lowStockItems.map((item) => (
+                                    <Card key={item.id} variant="outlined" sx={{ borderRadius: 2, borderLeft: '5px solid #d32f2f' }}>
+                                        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                                            <Typography variant="subtitle1" fontWeight="bold">
+                                                {item.productName}
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Stock: <strong>{item.quantity}</strong> / {item.initialQuantity || 'N/A'}
+                                                </Typography>
+                                                <Chip 
+                                                    label={`${Math.round((item.quantity / (item.initialQuantity || 1)) * 100)}%`} 
+                                                    size="small" 
+                                                    color="error" 
+                                                    variant="outlined"
+                                                />
+                                            </Box>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </Stack>
+                        ) : (
+                            <Box sx={{ py: 4, textAlign: 'center' }}>
+                                <Typography color="text.secondary">
+                                    All products are in healthy stock levels.
+                                </Typography>
+                            </Box>
+                        )}
+                    </Paper>
+                </motion.div>
+            </Grid>
+
+            {/* Best Sellers Section */}
+            <Grid size={{ xs: 12, md: 6 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.7 }}>
+                    <Paper sx={{ p: 3, borderRadius: 4, background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.05)', height: '100%' }}>
+                        <Typography variant="h6" gutterBottom color="primary.main" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                            <LocalFireDepartmentIcon color="error" /> Top 3 Best Selling Products
+                        </Typography>
+                        {topProducts.length > 0 ? (
+                            <Stack spacing={2}>
+                                {topProducts.map((product, index) => (
+                                    <Card key={product.name} variant="outlined" sx={{ borderRadius: 2, borderLeft: `5px solid ${COLORS[index % COLORS.length]}` }}>
+                                        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Box>
+                                                    <Typography variant="subtitle1" fontWeight="bold">
+                                                        {product.name}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Total Revenue: ฿{product.totalRevenue.toLocaleString()}
+                                                    </Typography>
+                                                </Box>
+                                                <Box sx={{ textAlign: 'right' }}>
+                                                    <Typography variant="h6" fontWeight="bold" color="primary">
+                                                        {product.totalQuantity}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Units Sold
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </Stack>
+                        ) : (
+                            <Box sx={{ py: 4, textAlign: 'center' }}>
+                                <Typography color="text.secondary">
+                                    No sales data available yet.
+                                </Typography>
+                            </Box>
+                        )}
+                    </Paper>
+                </motion.div>
+            </Grid>
+        </Grid>
         
       </Container>
     </Box>
