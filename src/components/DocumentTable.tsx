@@ -27,6 +27,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import EditIcon from '@mui/icons-material/Edit';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { motion } from 'framer-motion';
 import GenericTable, { Column } from '@/components/common/GenericTable';
 import PageHeader from '@/components/common/PageHeader';
@@ -83,6 +84,11 @@ export default function DocumentTable() {
   // Print States
   const [printQuotation, setPrintQuotation] = useState<Quotation | null>(null);
   const [openPrintDialog, setOpenPrintDialog] = useState(false);
+
+  // PO Upload States
+  const [openPOModal, setOpenPOModal] = useState(false);
+  const [selectedQTForPO, setSelectedQTForPO] = useState<Quotation | null>(null);
+  const [poFile, setPoFile] = useState<File | null>(null);
 
   // Filter States
   const [searchBuyer, setSearchBuyer] = useState('');
@@ -280,45 +286,75 @@ export default function DocumentTable() {
     window.print();
   };
 
-  const createPOFromQT = React.useCallback(async (qt: Quotation) => {
-    try {
-        const newPO = {
-            id: `PO-${Date.now()}`,
-            buyerName: qt.buyerName,
-            productName: qt.productName,
-            quantity: qt.quantity,
-            netPrice: qt.grandTotal,
-            orderDate: new Date().toISOString().split('T')[0],
-            status: 'Unpaid'
-        };
+   const handleOpenPOModal = (qt: Quotation) => {
+    setSelectedQTForPO(qt);
+    setPoFile(null);
+    setOpenPOModal(true);
+  };
 
-        const res = await fetch('/api/purchases/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify([newPO])
-        });
+  const handleClosePOModal = () => {
+    setOpenPOModal(false);
+    setSelectedQTForPO(null);
+    setPoFile(null);
+  };
 
-        if (res.ok) {
-            // Update QT status
-            const updatedQTs = fullQuotations.map(q => q.id === qt.id ? { ...q, status: 'PO Created' as const } : q);
-            setFullQuotations(updatedQTs);
-            setQuotations(prev => prev.map(q => q.id === qt.id ? { ...q, status: 'PO Created' as const } : q));
-            
-            // Sync with server
-            await fetch('/api/quotations', {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setPoFile(event.target.files[0]);
+    }
+  };
+
+  const handleSavePO = async () => {
+    if (!selectedQTForPO || !poFile) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const base64File = e.target?.result as string;
+        
+        try {
+            const newPO = {
+                id: `PO-${Date.now()}`,
+                buyerName: selectedQTForPO.buyerName,
+                productName: selectedQTForPO.productName,
+                quantity: selectedQTForPO.quantity,
+                netPrice: selectedQTForPO.grandTotal,
+                orderDate: new Date().toISOString().split('T')[0],
+                status: 'Unpaid',
+                poFile: base64File // Now saving the full file as base64
+            };
+
+            const res = await fetch('/api/purchases/import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updatedQTs)
+                body: JSON.stringify([newPO])
             });
 
-            alert('Purchase Order (PO) created successfully!');
-        } else {
-            alert('Failed to create PO');
+            if (res.ok) {
+                // Update QT status in both local states
+                const updatedQTs = fullQuotations.map(q => q.id === selectedQTForPO.id ? { ...q, status: 'PO Created' as const } : q);
+                setFullQuotations(updatedQTs);
+                // Also update the filtered list
+                setQuotations(prev => prev.map(q => q.id === selectedQTForPO.id ? { ...q, status: 'PO Created' as const } : q));
+                
+                // Sync with server
+                await fetch('/api/quotations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updatedQTs)
+                });
+
+                handleClosePOModal();
+                alert('สร้าง Purchase Order (PO) พร้อมบันทึกไฟล์สำเร็จ!');
+            } else {
+                alert('Failed to create PO');
+            }
+        } catch (error) {
+            console.error('Error creating PO:', error);
+            alert('เกิดข้อผิดพลาดในการสร้าง PO');
         }
-    } catch (error) {
-        console.error('Error creating PO:', error);
-    }
-  }, [fullQuotations]);
+    };
+    reader.readAsDataURL(poFile);
+  };
 
   const columns: Column<Quotation>[] = [
     {
@@ -395,8 +431,8 @@ export default function DocumentTable() {
                     </Tooltip>
                 )}
                 {row.status !== 'PO Created' && (
-                    <Tooltip title="Create Purchase Order (PO)">
-                        <IconButton size="small" color="primary" onClick={() => createPOFromQT(row)}>
+                    <Tooltip title="Create Purchase Order (PO) - Upload PDF">
+                        <IconButton size="small" color="primary" onClick={() => handleOpenPOModal(row)}>
                             <ShoppingCartIcon fontSize="small" />
                         </IconButton>
                     </Tooltip>
@@ -686,6 +722,85 @@ export default function DocumentTable() {
         <DialogActions>
             <Button onClick={() => setOpenPrintDialog(false)}>ปิด</Button>
             <Button variant="contained" startIcon={<PrintIcon />} onClick={handlePrint}>Print / Export PDF</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* PO Upload Modal */}
+      <Dialog 
+        open={openPOModal} 
+        onClose={handleClosePOModal}
+        PaperProps={{
+            sx: { 
+                borderRadius: 4, 
+                padding: 1.5,
+                minWidth: 450
+            }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+            อัปโหลดใบสั่งซื้อ (Upload Purchase Order: {selectedQTForPO?.id})
+        </DialogTitle>
+        <DialogContent>
+            {selectedQTForPO && (
+                <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1" gutterBottom>
+                        <strong>ลูกค้า:</strong> {selectedQTForPO.buyerName}
+                    </Typography>
+                    <Typography variant="subtitle1" gutterBottom>
+                         <strong>สินค้า:</strong> {selectedQTForPO.productName}
+                    </Typography>
+                    <Typography variant="subtitle1" gutterBottom>
+                         <strong>ยอดรวม:</strong> ฿{(selectedQTForPO.grandTotal ?? selectedQTForPO.totalPrice ?? 0).toLocaleString()}
+                    </Typography>
+                </Box>
+            )}
+            
+            <Box 
+                sx={{ 
+                    border: '2px dashed rgba(0, 0, 0, 0.1)', 
+                    borderRadius: 2, 
+                    p: 3, 
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    bgcolor: 'rgba(0,0,0,0.02)',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.05)' }
+                }}
+            >
+                <input
+                    accept="application/pdf"
+                    style={{ display: 'none' }}
+                    id="po-file-input"
+                    type="file"
+                    onChange={handleFileChange}
+                />
+                <Box component="label" htmlFor="po-file-input" sx={{ width: '100%', cursor: 'pointer', display: 'block' }}>
+                     {!poFile ? (
+                        <Box sx={{ p: 2 }}>
+                             <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                             <Typography color="text.secondary">คลิกเพื่ออัปโหลดไฟล์ PDF (ใบ PO จากลูกค้า)</Typography>
+                        </Box>
+                     ) : (
+                        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                             <CloudUploadIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
+                             <Typography sx={{ fontWeight: 'bold', color: 'primary.main' }}>{poFile.name}</Typography>
+                             <Typography variant="caption" color="text.secondary">{(poFile.size / 1024).toFixed(2)} KB</Typography>
+                             <Button size="small" sx={{ mt: 1 }}>เปลี่ยนไฟล์ (Change File)</Button>
+                        </Box>
+                     )}
+                </Box>
+            </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+            <Button onClick={handleClosePOModal} color="inherit">Cancel</Button>
+            <Button 
+                onClick={handleSavePO} 
+                variant="contained" 
+                color="primary" 
+                disabled={!poFile}
+                sx={{ borderRadius: '8px' }}
+            >
+                Confirm & Create PO
+            </Button>
         </DialogActions>
       </Dialog>
 

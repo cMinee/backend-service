@@ -16,6 +16,7 @@ import {
   DialogActions,
   TextField,
   Select,
+  Stack,
   MenuItem,
   InputLabel,
   FormControl,
@@ -25,6 +26,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import DescriptionIcon from '@mui/icons-material/Description';
 import * as XLSX from 'xlsx';
 import { motion } from 'framer-motion';
 
@@ -235,6 +237,15 @@ export default function PurchaseTable() {
     handleClosePaymentModal();
   };
 
+  const handleViewPO = (row: PurchaseTransaction) => {
+    if (!row.poFile) return;
+    // Open base64 file in new window
+    const newWindow = window.open();
+    if (newWindow) {
+        newWindow.document.write(`<iframe src="${row.poFile}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+    }
+  };
+
   const columns: Column<PurchaseTransaction>[] = [
     {
         id: 'buyerName',
@@ -285,11 +296,20 @@ export default function PurchaseTable() {
         label: 'Actions',
         align: 'center',
         render: (row) => (
-            <Tooltip title="Upload Payment Evidence">
-                <IconButton size="small" onClick={() => handlePaymentClick(row)} color={row.status === 'Paid' ? 'success' : 'primary'}>
-                    <PaymentsIcon fontSize="small" />
-                </IconButton>
-            </Tooltip>
+            <Stack direction="row" spacing={1} justifyContent="center">
+                {row.poFile && (
+                    <Tooltip title="View Customer PO">
+                        <IconButton size="small" onClick={() => handleViewPO(row)} color="info">
+                            <DescriptionIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                )}
+                <Tooltip title="Upload Payment Evidence">
+                    <IconButton size="small" onClick={() => handlePaymentClick(row)} color={row.status === 'Paid' ? 'success' : 'primary'}>
+                        <PaymentsIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+            </Stack>
         )
     }
   ];
