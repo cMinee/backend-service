@@ -86,23 +86,47 @@ const handleTextMessage = async (text: string, replyToken: string) => {
             
             replyText = `📊 สรุปยอดค้างชำระ\n\n${orderList}\n\nรวมทั้งหมด: ${formatMoney(totalUnpaid)}`;
         }
-    } else if (text.includes('ยอดขายรายวัน') || text.includes('ยอดขายวันนี้')) {
-        // 3. Report Daily Sales
-        const dateMatch = text.match(/\d{4}-\d{2}-\d{2}/);
-        const targetDate = dateMatch ? dateMatch[0] : new Date().toISOString().split('T')[0];
-
-        const dailyOrders = currentData.filter(item => item.orderDate === targetDate);
-
-        if (dailyOrders.length === 0) {
-            replyText = `ไม่พบยอดขายสำหรับวันที่ ${targetDate} ครับ`;
-        } else {
-            const totalDaily = dailyOrders.reduce((sum, item) => sum + item.netPrice, 0);
-            const orderList = dailyOrders
+    } else if (text.includes('ยอดขาย')) {
+        // 3. Report Sales with Timeframes
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+        
+        // Helper to filter and format sales
+        const getSalesReport = (items: PurchaseTransaction[], title: string, filterFn: (item: PurchaseTransaction) => boolean) => {
+            const filtered = items.filter(filterFn);
+            if (filtered.length === 0) return `ไม่พบยอดขายสำหรับ ${title} ครับ`;
+            
+            const total = filtered.reduce((sum, item) => sum + item.netPrice, 0);
+            const list = filtered.slice(0, 10)
                 .map((item, index) => `${index + 1}. ${item.productName} - ${formatMoney(item.netPrice)}`)
                 .join('\n');
-            replyText = `📅 ยอดขายวันที่ ${targetDate}\n\n${orderList}\n\nรวมยอดขาย: ${formatMoney(totalDaily)}`;
-        }
+            
+            return `📊 ${title}\n\n${list}${filtered.length > 10 ? '\n...' : ''}\n\nยอดรวมทั้งหมด: ${formatMoney(total)}`;
+        };
 
+        if (text === 'ยอดขาย') {
+            replyText = `📊 พิมพ์หมายเลขเพื่อดูยอดขายตามช่วงเวลา:\n1. วันนี้\n2. รายสัปดาห์ (7 วันล่าสุด)\n3. รายเดือน (30 วันล่าสุด)\n4. รายปี (ปีปัจจุบัน)`;
+        } else if (text.includes('1') || text.includes('วันนี้')) {
+            replyText = getSalesReport(currentData, `ยอดขายวันนี้ (${todayStr})`, item => item.orderDate === todayStr);
+        } else if (text.includes('2') || text.includes('สัปดาห์')) {
+            const weekAgo = new Date(now);
+            weekAgo.setDate(now.getDate() - 7);
+            const weekAgoStr = weekAgo.toISOString().split('T')[0];
+            replyText = getSalesReport(currentData, 'ยอดขายรายสัปดาห์ (7 วันล่าสุด)', item => item.orderDate >= weekAgoStr);
+        } else if (text.includes('3') || text.includes('เดือน')) {
+            const monthAgo = new Date(now);
+            monthAgo.setMonth(now.getMonth() - 1);
+            const monthAgoStr = monthAgo.toISOString().split('T')[0];
+            replyText = getSalesReport(currentData, 'ยอดขายรายเดือน (30 วันล่าสุด)', item => item.orderDate >= monthAgoStr);
+        } else if (text.includes('4') || text.includes('ปี')) {
+            const yearStartStr = `${now.getFullYear()}-01-01`;
+            replyText = getSalesReport(currentData, `ยอดขายรายปี (${now.getFullYear()})`, item => item.orderDate >= yearStartStr);
+        } else {
+            // Check for specific date YYYY-MM-DD
+            const dateMatch = text.match(/\d{4}-\d{2}-\d{2}/);
+            const targetDate = dateMatch ? dateMatch[0] : todayStr;
+            replyText = getSalesReport(currentData, `ยอดขายวันที่ ${targetDate}`, item => item.orderDate === targetDate);
+        }
     } else if (text.includes('เช็คสินค้าใกล้หมด') || text.includes('สินค้าใกล้หมด')) {
         // 4. Low Stock Alert
         const inventory = getInventory();
