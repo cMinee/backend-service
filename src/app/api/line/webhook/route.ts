@@ -86,10 +86,11 @@ const handleTextMessage = async (text: string, replyToken: string) => {
             
             replyText = `📊 สรุปยอดค้างชำระ\n\n${orderList}\n\nรวมทั้งหมด: ${formatMoney(totalUnpaid)}`;
         }
-    } else if (text.includes('ยอดขาย')) {
+    } else if (text.includes('ยอดขาย') || ['วันนี้', 'สัปดาห์', 'เดือน', 'ปี'].some(k => text.includes(k)) || /^[1-4]$/.test(text.trim())) {
         // 3. Report Sales with Timeframes
         const now = new Date();
         const todayStr = now.toISOString().split('T')[0];
+        const input = text.trim();
         
         // Helper to filter and format sales
         const getSalesReport = (items: PurchaseTransaction[], title: string, filterFn: (item: PurchaseTransaction) => boolean) => {
@@ -104,29 +105,30 @@ const handleTextMessage = async (text: string, replyToken: string) => {
             return `📊 ${title}\n\n${list}${filtered.length > 10 ? '\n...' : ''}\n\nยอดรวมทั้งหมด: ${formatMoney(total)}`;
         };
 
-        if (text === 'ยอดขาย') {
+        if (input === 'ยอดขาย') {
             replyText = `📊 พิมพ์หมายเลขเพื่อดูยอดขายตามช่วงเวลา:\n1. วันนี้\n2. รายสัปดาห์ (7 วันล่าสุด)\n3. รายเดือน (30 วันล่าสุด)\n4. รายปี (ปีปัจจุบัน)`;
-        } else if (text.includes('1') || text.includes('วันนี้')) {
+        } else if (input === '1' || input.includes('วันนี้')) {
             replyText = getSalesReport(currentData, `ยอดขายวันนี้ (${todayStr})`, item => item.orderDate === todayStr);
-        } else if (text.includes('2') || text.includes('สัปดาห์')) {
+        } else if (input === '2' || input.includes('สัปดาห์')) {
             const weekAgo = new Date(now);
             weekAgo.setDate(now.getDate() - 7);
             const weekAgoStr = weekAgo.toISOString().split('T')[0];
             replyText = getSalesReport(currentData, 'ยอดขายรายสัปดาห์ (7 วันล่าสุด)', item => item.orderDate >= weekAgoStr);
-        } else if (text.includes('3') || text.includes('เดือน')) {
+        } else if (input === '3' || input.includes('เดือน')) {
             const monthAgo = new Date(now);
             monthAgo.setMonth(now.getMonth() - 1);
             const monthAgoStr = monthAgo.toISOString().split('T')[0];
             replyText = getSalesReport(currentData, 'ยอดขายรายเดือน (30 วันล่าสุด)', item => item.orderDate >= monthAgoStr);
-        } else if (text.includes('4') || text.includes('ปี')) {
+        } else if (input === '4' || input.includes('ปี')) {
             const yearStartStr = `${now.getFullYear()}-01-01`;
             replyText = getSalesReport(currentData, `ยอดขายรายปี (${now.getFullYear()})`, item => item.orderDate >= yearStartStr);
         } else {
             // Check for specific date YYYY-MM-DD
-            const dateMatch = text.match(/\d{4}-\d{2}-\d{2}/);
+            const dateMatch = input.match(/\d{4}-\d{2}-\d{2}/);
             const targetDate = dateMatch ? dateMatch[0] : todayStr;
             replyText = getSalesReport(currentData, `ยอดขายวันที่ ${targetDate}`, item => item.orderDate === targetDate);
         }
+
     } else if (text.includes('เช็คสินค้าใกล้หมด') || text.includes('สินค้าใกล้หมด')) {
         // 4. Low Stock Alert
         const inventory = getInventory();
@@ -147,26 +149,39 @@ const handleTextMessage = async (text: string, replyToken: string) => {
     } else {
         // 5. Product Search (Fuzzy Match)
         const inventory = getInventory();
+        const input = text.trim();
         
-        // Clean text: remove prefix "สต็อก" or "check" if present to improve matching
-        let cleanText = text.toLowerCase().replace(/^สต็อก\s*/, '').replace(/^check\s*/, '').trim();
-        const searchTerms = cleanText.split(/\s+/);
-
-        const matchedItems = inventory.filter(item => {
-            const itemText = `${item.productName} ${item.brand} ${item.sku}`.toLowerCase();
-            return searchTerms.every(term => itemText.includes(term));
-        });
-
-        if (matchedItems.length > 0) {
-            if (matchedItems.length === 1) {
-                const item = matchedItems[0];
-                replyText = `🔎 ข้อมูลสต็อก:\n\nสินค้า: ${item.productName}\nคงเหลือ: ✨ ${item.quantity} ชิ้น ✨\nราคา: ${formatMoney(item.price)}\nSKU: ${item.sku}`;
-            } else {
-                 const list = matchedItems.slice(0, 5).map(item => `- ${item.productName}: ${item.quantity} ชิ้น`).join('\n');
-                 replyText = `🔎 พบสินค้าใกล้เคียง (${matchedItems.length}):\n\n${list}${matchedItems.length > 5 ? '\n...' : ''}`;
-            }
+        // Explicit check for standalone "สต็อก" command
+        if (input === 'สต็อก' || input.toLowerCase() === 'stock') {
+            replyText = 'กรุณาพิมพ์สินค้าที่ต้องการ เช่น:\nสต็อก Monitor Dell';
         } else {
-             replyText = `ผมไม่เข้าใจคำสั่งครับ 😅 หรือค้นหาไม่เจอ\n\nลองพิมพ์ เช่น:\n- "สินค้าใกล้หมด"\n- "สต็อก [ชื่อสินค้า]"\n- "ยอดขายวันนี้"\n- "ยอดค้าง"`;
+            // Clean text: remove prefix "สต็อก" or "check" if present to improve matching
+            let cleanText = text.toLowerCase().replace(/^สต็อก\s*/, '').replace(/^check\s*/, '').trim();
+            
+            // Safety check: Avoid single digit numbers unless they are explicitly prefixed with "สต็อก"
+            if (/^\d$/.test(cleanText) && !text.includes('สต็อก')) {
+                replyText = `ผมไม่เข้าใจคำสั่งครับ 😅 หรือค้นหาไม่เจอ\n\nลองพิมพ์ เช่น:\n- "สินค้าใกล้หมด"\n- "สต็อก [ชื่อสินค้า]"\n- "ยอดขายวันนี้"\n- "ยอดค้าง"`;
+            } else if (cleanText === '') {
+                 replyText = `กรุณาพิมพ์ชื่อสินค้าที่ต้องการค้นหาครับ เช่น "Monitor"`;
+            } else {
+                const searchTerms = cleanText.split(/\s+/);
+                const matchedItems = inventory.filter(item => {
+                    const itemText = `${item.productName} ${item.brand} ${item.sku}`.toLowerCase();
+                    return searchTerms.every(term => itemText.includes(term));
+                });
+
+                if (matchedItems.length > 0) {
+                    if (matchedItems.length === 1) {
+                        const item = matchedItems[0];
+                        replyText = `🔎 ข้อมูลสต็อก:\n\nสินค้า: ${item.productName}\nคงเหลือ: ✨ ${item.quantity} ชิ้น ✨\nราคา: ${formatMoney(item.price)}\nSKU: ${item.sku}`;
+                    } else {
+                        const list = matchedItems.slice(0, 5).map(item => `- ${item.productName}: ${item.quantity} ชิ้น`).join('\n');
+                        replyText = `🔎 พบสินค้าใกล้เคียง (${matchedItems.length}):\n\n${list}${matchedItems.length > 5 ? '\n...' : ''}`;
+                    }
+                } else {
+                    replyText = `ขออภัย ไม่พบสินค้าที่ตรงกับ "${cleanText}" ในระบบครับ 😅`;
+                }
+            }
         }
     }
 
