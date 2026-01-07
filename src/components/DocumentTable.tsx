@@ -86,7 +86,7 @@ export interface Quotation {
   sellerPhone?: string;
   salesPerson?: string;
   paymentTerm?: string;
-  totalPrice?: number;
+  totalPrice?: number; // test
 }
 
 export default function DocumentTable() {
