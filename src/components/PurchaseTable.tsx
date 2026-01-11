@@ -41,6 +41,312 @@ import GenericTable, { Column } from '@/components/common/GenericTable';
 import PageHeader from '@/components/common/PageHeader';
 import FilterSection from '@/components/common/FilterSection';
 
+// =========================
+// OCR / Amount Verification Helpers
+// =========================
+
+const THAI_DIGIT_MAP: Record<string, string> = {
+    '๐': '0', '๑': '1', '๒': '2', '๓': '3', '๔': '4',
+    '๕': '5', '๖': '6', '๗': '7', '๘': '8', '๙': '9',
+};
+
+const toArabicDigits = (s: string) => s.replace(/[๐-๙]/g, (d) => THAI_DIGIT_MAP[d] ?? d);
+
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+const loadImage = (src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+    });
+
+const autoCropToContent = async (dataUrl: string): Promise<string> => {
+    const img = await loadImage(dataUrl);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return dataUrl;
+
+    ctx.drawImage(img, 0, 0);
+
+    const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // หา bounding box ของพิกเซลที่ "ไม่ขาว" (เป็นข้อความ/เส้น/โลโก้)
+    // ใช้ sampling step เพื่อลดโหลด
+    const step = Math.max(2, Math.floor(Math.min(width, height) / 400));
+    const WHITE_THRESHOLD = 245; // ยิ่งต่ำ = ครอปเข้มขึ้น
+
+    let minX = width, minY = height, maxX = 0, maxY = 0;
+    let found = false;
+
+    for (let y = 0; y < height; y += step) {
+        for (let x = 0; x < width; x += step) {
+            const i = (y * width + x) * 4;
+            const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+            if (a < 20) continue;
+
+            // luminance
+            const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+            if (lum < WHITE_THRESHOLD) {
+                found = true;
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+
+    // ถ้าไม่เจอ content เลย ไม่ครอป
+    if (!found) return dataUrl;
+
+    // padding กันครอปกินขอบ
+    const pad = Math.round(Math.min(width, height) * 0.03); // 3%
+    minX = Math.max(0, minX - pad);
+    minY = Math.max(0, minY - pad);
+    maxX = Math.min(width - 1, maxX + pad);
+    maxY = Math.min(height - 1, maxY + pad);
+
+    const cropW = Math.max(1, maxX - minX);
+    const cropH = Math.max(1, maxY - minY);
+
+    // ถ้ากล่องเล็กผิดปกติ (เช่นเจอแค่จุดเดียว) ไม่ครอป
+    if (cropW * cropH < width * height * 0.08) return dataUrl; // <8% ของภาพ
+
+    const out = document.createElement('canvas');
+    out.width = cropW;
+    out.height = cropH;
+    const octx = out.getContext('2d');
+    if (!octx) return dataUrl;
+
+    octx.drawImage(canvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+    return out.toDataURL('image/png');
+};
+
+
+/**
+ * Enhance image for OCR (works well for slip screenshots)
+ * - upscale
+ * - grayscale + contrast + brightness
+ * - threshold (binarize)
+ */
+const enhanceForOcr = async (dataUrl: string): Promise<string> => {
+    // ✅ ครอปก่อน (ตัดขอบขาว/พื้นหลังออก)
+    const croppedUrl = await autoCropToContent(dataUrl);
+    const img = await loadImage(croppedUrl);
+
+    // upscale to help OCR (target width ~2000px)
+    const scale = Math.max(1, 2000 / img.width);
+    const w = Math.round(img.width * scale);
+    const h = Math.round(img.height * scale);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return croppedUrl;
+
+    ctx.filter = 'grayscale(1) contrast(2.0) brightness(1.1)';
+    ctx.drawImage(img, 0, 0, w, h);
+
+    // threshold (ปรับค่าได้: 160-190)
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const d = imageData.data;
+    const TH = 175;
+
+    for (let i = 0; i < d.length; i += 4) {
+        const v = (d[i] + d[i + 1] + d[i + 2]) / 3;
+        const t = v > TH ? 255 : 0;
+        d[i] = d[i + 1] = d[i + 2] = t;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    return canvas.toDataURL('image/png');
+};
+
+const normalizeNumberToken = (tokenRaw: string): string => {
+    let t = toArabicDigits(tokenRaw);
+
+    // remove currency symbol
+    t = t.replace(/[฿]/g, '');
+
+    // remove spaces
+    t = t.replace(/\s+/g, '');
+
+    // handle decimal comma like "198,00" -> "198.00"
+    if (/^\d+,\d{2}$/.test(t)) t = t.replace(',', '.');
+
+    // remove thousand separators
+    // "1,234.00" -> "1234.00"
+    t = t.replace(/,/g, '');
+
+    // fix OCR common mistakes *inside numeric token only*
+    // (do not apply to whole text to avoid destroying words)
+    t = t
+        .replace(/[Oo]/g, '0')
+        .replace(/[Il|]/g, '1')
+        .replace(/S/g, '5')
+        .replace(/B/g, '8');
+
+    // fix weird "198. 00" like cases (after spaces removed it’s usually already ok)
+    t = t.replace(/(\d)\.(\d{1})$/, '$1.0$2');
+
+    return t;
+};
+
+type AmountCandidate = {
+    value: number;
+    score: number;
+    line: string;
+};
+
+const POSITIVE_KEYWORDS: RegExp[] = [
+    /amount/i,
+    /payment/i,
+    /total/i,
+    /net/i,
+    /grand/i,
+    /ยอดชำระ/,
+    /ยอดโอน/,
+    /โอนเงิน/,
+    /จำนวนเงิน/,
+    /จำนวน\s*:?/,
+    /ราคา/,
+    /เติมเงิน/,
+];
+
+const CURRENCY_KEYWORDS: RegExp[] = [
+    /บาท/,
+    /baht/i,
+    /thb/i,
+    /฿/,
+];
+
+const NEGATIVE_KEYWORDS: RegExp[] = [
+    /fee/i,
+    /ค่าธรรมเนียม/,
+    /ค่าบริการ/,
+    /commission/i,
+];
+
+const looksLikeDateOrTimeLine = (line: string) => {
+    // common date/time patterns that contain many distracting numbers
+    return /(:\d{2})/.test(line) || /(ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)/.test(line) || /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(line);
+};
+
+const extractAmountCandidates = (rawText: string, expectedAmount: number): AmountCandidate[] => {
+    const expected = round2(expectedAmount);
+    const text = toArabicDigits(rawText);
+
+    const lines = text
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+    const candidates: AmountCandidate[] = [];
+
+    // number-ish tokens (allow commas/dots/spaces inside)
+    const tokenRegex = /[0-9๐-๙OoIlSB฿][0-9๐-๙OoIlSB฿,\.\s]{0,18}/g;
+
+    for (const lineRaw of lines) {
+        const line = lineRaw;
+
+        const hasPositive = POSITIVE_KEYWORDS.some((re) => re.test(line));
+        const hasCurrency = CURRENCY_KEYWORDS.some((re) => re.test(line));
+        const hasNegative = NEGATIVE_KEYWORDS.some((re) => re.test(line));
+        const dateTimePenalty = looksLikeDateOrTimeLine(line);
+
+        const matches = line.match(tokenRegex) ?? [];
+        for (const m of matches) {
+            const cleaned = normalizeNumberToken(m);
+
+            // must contain at least one digit
+            if (!/\d/.test(cleaned)) continue;
+
+            // parse float
+            const v = Number(cleaned);
+            if (!Number.isFinite(v)) continue;
+
+            // filter obvious junk
+            if (v <= 0) continue; // amounts should be > 0
+            if (v > 100000000) continue;
+
+            // score
+            const v2 = round2(v);
+            const diff = Math.abs(v2 - expected);
+
+            let score = 0;
+
+            // exact match priority
+            if (diff < 0.005) score += 2000;
+
+            // closeness (the closer, the higher)
+            score += Math.max(0, 600 - diff * 80);
+
+            // context boosts
+            if (hasPositive) score += 250;
+            if (hasCurrency) score += 120;
+
+            // avoid fees and date/time lines
+            if (hasNegative) score -= 700;
+            if (dateTimePenalty) score -= 200;
+
+            // prefer 2-decimal numbers
+            if (/\.\d{2}$/.test(cleaned)) score += 80;
+
+            candidates.push({ value: v2, score, line });
+        }
+    }
+
+    return candidates.sort((a, b) => b.score - a.score);
+};
+
+const analyzeEvidence = (rawText: string, expectedAmount: number): { foundAmount: number | null; isMatch: boolean; candidates: number[] } => {
+    const expected = round2(expectedAmount);
+
+    // 1) quick exact-match string search (super reliable when OCR reads correctly)
+    const textCompact = toArabicDigits(rawText)
+        .replace(/\s+/g, '')
+        .replace(/,/g, '')
+        .replace(/[฿]/g, '')
+        .toLowerCase();
+
+    const expectedVariants = [
+        expected.toFixed(2),                  // 198.00
+        expected.toString(),                  // 198
+        expected.toFixed(2).replace('.', ''), // 19800 (rare OCR missing dot)
+    ];
+
+    for (const v of expectedVariants) {
+        const vv = v.replace(/\s+/g, '').replace(/,/g, '').toLowerCase();
+        if (textCompact.includes(vv)) {
+            return { foundAmount: expected, isMatch: true, candidates: [expected] };
+        }
+    }
+
+    // 2) candidate extraction + scoring
+    const cands = extractAmountCandidates(rawText, expected);
+
+    if (cands.length === 0) {
+        return { foundAmount: null, isMatch: false, candidates: [] };
+    }
+
+    const best = cands[0].value;
+    const isMatch = Math.abs(round2(best) - expected) < 0.005;
+
+    return {
+        foundAmount: best,
+        isMatch,
+        candidates: cands.slice(0, 8).map((c) => c.value),
+    };
+};
+
 export default function PurchaseTable() {
     const [data, setData] = useState<PurchaseTransaction[]>(initialData);
     const [fullData, setFullData] = useState<PurchaseTransaction[]>(initialData);
@@ -55,7 +361,15 @@ export default function PurchaseTable() {
 
     // OCR States
     const [isProcessingSlip, setIsProcessingSlip] = useState(false);
-    const [ocrResult, setOcrResult] = useState<{ foundAmount: number | null, isMatch: boolean, rawText: string } | null>(null);
+    type OcrResult = {
+        foundAmount: number | null;
+        isMatch: boolean;
+        rawText: string;
+        candidates: number[];
+    };
+
+    const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
+
 
     // Filter States
     const [searchBuyer, setSearchBuyer] = useState('');
@@ -205,86 +519,120 @@ export default function PurchaseTable() {
         setPaymentPreview(null);
     };
 
-    const extractAmount = (text: string): number | null => {
-        // Strategy 1: Look for "Amount" (English)
-        // Matches "Amount 1,234.00" or similar
-        const amountMatch = text.match(/Amount\s*[\D]*([\d,]+\.?\d*)/i);
-        if (amountMatch && amountMatch[1]) {
-            return parseFloat(amountMatch[1].replace(/,/g, ''));
-        }
+    // const analyzeEvidence = (text: string, expectedAmount: number): { foundAmount: number | null, isMatch: boolean } => {
+    //     // --- 1. PRECISE MATCH (Targeted Search) ---
+    //     // Best for correct slips. Finds the expected amount directly.
 
-        // Strategy 2: Look for "จำนวนเงิน" (Thai)
-        const thaiAmountMatch = text.match(/จำนวนเงิน\s*[\D]*([\d,]+\.?\d*)/);
-        if (thaiAmountMatch && thaiAmountMatch[1]) {
-            return parseFloat(thaiAmountMatch[1].replace(/,/g, ''));
-        }
+    //     const formatted = expectedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    //     const variants = [
+    //         formatted, // "1,234.00"
+    //         expectedAmount.toFixed(2), // "1234.00"
+    //         expectedAmount.toString() // "1234"
+    //     ];
 
-        // Strategy 3: Look for "จำนวน" (Thai alternative)
-        const transferAmountMatch = text.match(/จำนวน\s*[\D]*([\d,]+\.?\d*)/);
-        if (transferAmountMatch && transferAmountMatch[1]) {
-            return parseFloat(transferAmountMatch[1].replace(/,/g, ''));
-        }
+    //     const compactText = text.replace(/(\d)\s+(\d)/g, '$1$2').replace(/,/g, '');
+    //     for (const v of variants) {
+    //         if (compactText.includes(v.replace(/,/g, ''))) {
+    //             return { foundAmount: expectedAmount, isMatch: true };
+    //         }
+    //     }
 
-        // Strategy 4: Look for "โอนเงิน" (Thai alternative)
-        const transferAmountMatch2 = text.match(/โอนเงิน\s*[\D]*([\d,]+\.?\d*)/);
-        if (transferAmountMatch2 && transferAmountMatch2[1]) {
-            return parseFloat(transferAmountMatch2[1].replace(/,/g, ''));
-        }
+    //     // --- 2. EXTRACTION STRATEGY (Fallback) ---
+    //     // If we reach here, the expected amount is NOT in the text.
+    //     // We now try to find WHAT IS in the text, to report a mismatch.
 
-        return null;
-    };
+    //     // Clean Thai Text
+    //     const cleanedText = text.replace(/([ก-๙])\s+(?=[ก-๙])/g, '$1');
+
+    //     const candidates: number[] = [];
+
+    //     // Strategy A: Keyword Prefix (Amount 100.00)
+    //     // Keywords: Amount, จำนวนเงิน, ยอดโอน, โอนเงิน, โอน, จำนวน, ราคา
+    //     const prefixPattern = /(?:Amount|จำนวนเงิน|ยอดโอน|โอนเงิน|โอน|จำนวน|ราคา|Net Amount)[\D]{0,50}?([\d,]+\.\d{2})/gi;
+    //     let m;
+    //     while ((m = prefixPattern.exec(cleanedText)) !== null) {
+    //         if (m[1]) candidates.push(parseFloat(m[1].replace(/,/g, '')));
+    //     }
+
+    //     // Strategy B: Keyword Suffix (100.00 Baht)
+    //     // Look for number immediately followed by "Baht" or "บาท"
+    //     const suffixPattern = /([\d,]+\.\d{2})\s*(?:Baht|THB|บาท)/gi;
+    //     while ((m = suffixPattern.exec(cleanedText)) !== null) {
+    //         if (m[1]) candidates.push(parseFloat(m[1].replace(/,/g, '')));
+    //     }
+
+    //     if (candidates.length > 0) {
+    //         return { foundAmount: candidates[0], isMatch: false };
+    //     }
+
+    //     return { foundAmount: null, isMatch: false };
+    // };
 
     const handlePaymentFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files && event.target.files[0]) {
-            const file = event.target.files[0];
-            setPaymentFile(file);
-            setOcrResult(null); // Reset previous result
-            setIsProcessingSlip(true);
+        if (!event.target.files || !event.target.files[0]) return;
+        if (!currentTransaction) return;
 
-            const reader = new FileReader();
-            reader.onloadend = async () => {
-                const imageDataUrl = reader.result as string;
-                setPaymentPreview(imageDataUrl);
+        const file = event.target.files[0];
+        setPaymentFile(file);
+        setOcrResult(null);
+        setIsProcessingSlip(true);
 
-                try {
-                    // Perform OCR
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const imageDataUrl = reader.result as string;
+            setPaymentPreview(imageDataUrl);
+
+            const expectedAmount = currentTransaction.netPrice;
+
+            try {
+                // preprocess (enhanced) + fallback original
+                const enhanced = await enhanceForOcr(imageDataUrl);
+                const attempts = [enhanced, imageDataUrl];
+
+                let best: { foundAmount: number | null; isMatch: boolean; rawText: string; candidates: number[] } | null = null;
+
+                for (const imgSrc of attempts) {
                     const result = await Tesseract.recognize(
-                        imageDataUrl,
-                        'eng+tha', // Load both English and Thai trained data
+                        imgSrc,
+                        'eng+tha',
                         {
-                            logger: m => console.log(m) // Optional logger
+                            logger: m => console.log(m),
                         }
                     );
 
-                    const text = result.data.text;
-                    console.log("OCR Text:", text);
+                    const text = result.data.text || '';
+                    const analysis = analyzeEvidence(text, expectedAmount);
 
-                    const foundAmount = extractAmount(text);
+                    const current = {
+                        foundAmount: analysis.foundAmount,
+                        isMatch: analysis.isMatch,
+                        rawText: text,
+                        candidates: analysis.candidates,
+                    };
 
-                    if (foundAmount !== null && currentTransaction) {
-                        const isMatch = Math.abs(foundAmount - currentTransaction.netPrice) < 0.01; // Allow small float diff
-                        setOcrResult({
-                            foundAmount,
-                            isMatch,
-                            rawText: text
-                        });
-                    } else {
-                        setOcrResult({
-                            foundAmount: null,
-                            isMatch: false,
-                            rawText: text
-                        });
-                    }
+                    // pick best:
+                    // - if match found => stop immediately
+                    // - else keep one that has foundAmount (not null) and closer candidates (analyzeEvidence already scored internally)
+                    if (!best) best = current;
+                    if (current.isMatch) { best = current; break; }
 
-                } catch (error) {
-                    console.error("OCR Failed:", error);
-                } finally {
-                    setIsProcessingSlip(false);
+                    // if previously null but now found number => replace
+                    if (best.foundAmount === null && current.foundAmount !== null) best = current;
                 }
-            };
-            reader.readAsDataURL(file);
-        }
+
+                setOcrResult(best ?? { foundAmount: null, isMatch: false, rawText: '', candidates: [] });
+
+            } catch (error) {
+                console.error("OCR Failed:", error);
+                setOcrResult({ foundAmount: null, isMatch: false, rawText: '', candidates: [] });
+            } finally {
+                setIsProcessingSlip(false);
+            }
+        };
+
+        reader.readAsDataURL(file);
     };
+
 
     const handleSavePayment = async () => {
         if (!currentTransaction) return;
@@ -464,7 +812,17 @@ export default function PurchaseTable() {
                                 </Box>
                             ) : (
                                 <Box sx={{ position: 'relative', width: '100%', minHeight: 200, display: 'flex', justifyContent: 'center' }}>
-                                    <img src={paymentPreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8 }} />
+                                    <img
+                                        src={paymentPreview}
+                                        alt="Preview"
+                                        style={{
+                                            width: '100%',
+                                            maxWidth: 520,
+                                            maxHeight: 520,
+                                            objectFit: 'contain',
+                                            borderRadius: 8
+                                        }}
+                                    />
                                     <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(0,0,0,0.3)', opacity: 0, transition: 'opacity 0.2s', '&:hover': { opacity: 1 } }}>
                                         <Typography sx={{ color: '#fff', fontWeight: 'bold' }}>Change Image</Typography>
                                     </Box>
@@ -474,22 +832,23 @@ export default function PurchaseTable() {
                     </Box>
 
                     {/* OCR Result Display */}
-                    {ocrResult && (
+                    {ocrResult && currentTransaction && (
                         <Box sx={{ mt: 2 }}>
-                            {ocrResult.foundAmount !== null ? (
-                                ocrResult.isMatch ? (
-                                    <Alert icon={<CheckIcon fontSize="inherit" />} severity="success">
-                                        Verified! Amount matches: ฿{ocrResult.foundAmount.toLocaleString()}
+                            {ocrResult.isMatch ? (
+                                <Alert icon={<CheckIcon fontSize="inherit" />} severity="success">
+                                    Verified! Amount matches: ฿{ocrResult.foundAmount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </Alert>
+                            ) : (
+                                ocrResult.foundAmount !== null ? (
+                                    <Alert icon={<ErrorOutlineIcon fontSize="inherit" />} severity="error">
+                                        Mismatch! Slip says ฿{ocrResult.foundAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        {' '}but expected ฿{currentTransaction.netPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </Alert>
                                 ) : (
-                                    <Alert icon={<ErrorOutlineIcon fontSize="inherit" />} severity="error">
-                                        Mismatch! Slip says ฿{ocrResult.foundAmount.toLocaleString()}, but expected ฿{currentTransaction?.netPrice.toLocaleString()}
+                                    <Alert severity="warning">
+                                        Could not detect amount automatically. (Save disabled) กรุณาอัปโหลดรูปที่ชัดขึ้น/ครอปเฉพาะส่วนยอดเงิน
                                     </Alert>
                                 )
-                            ) : (
-                                <Alert severity="warning">
-                                    Could not detect amount automatically. Please verify manually.
-                                </Alert>
                             )}
                         </Box>
                     )}
@@ -501,9 +860,10 @@ export default function PurchaseTable() {
                         variant="contained"
                         color="primary"
                         disabled={
-                            (!paymentPreview && !currentTransaction?.paymentSlip) || // No image
-                            isProcessingSlip || // Still analyzing
-                            (ocrResult?.foundAmount !== null && !ocrResult?.isMatch) // Mismatch detected
+                            !paymentPreview ||           // ต้องมีรูป
+                            isProcessingSlip ||          // ห้ามกดระหว่าง OCR
+                            !ocrResult ||                // ต้องมีผล OCR
+                            !ocrResult.isMatch           // ต้อง match เท่านั้น
                         }
                     >
                         Save & Confirm Paid
